@@ -831,7 +831,7 @@ String OTAPushUpdateManager::processTemplate(const String &templateHTML, const S
     String html = templateHTML;
 
     // DEBUG: Log para verificar substituição
-    LOG_VERBOSE("Processando template - Título: %s", title.c_str());
+    LOG_DEBUG("Processando template - Título: %s", title.c_str());
 
     // ✅ ALTERADO: Padrão agora é dark (true) em vez de light (false)
     bool isDarkMode = darkMode;
@@ -870,7 +870,7 @@ String OTAPushUpdateManager::processTemplate(const String &templateHTML, const S
     }
     else
     {
-        LOG_VERBOSE("✅ Placeholder {{CSS}} substituído com sucesso");
+        LOG_DEBUG("✅ Placeholder {{CSS}} substituído com sucesso");
     }
 
     return html;

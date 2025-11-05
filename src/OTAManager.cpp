@@ -42,6 +42,12 @@ void OTAManager::begin(const String &serverUrl, uint16_t webPort, UpdateMode mod
                                                            : "Híbrido");
 }
 
+void OTAManager::end()
+{
+    OTAPushUpdateManager::stop();
+    OTAPullUpdateManager::stopUpdateThread();
+}
+
 void OTAManager::setUpdateMode(UpdateMode mode)
 {
     _currentMode = mode;

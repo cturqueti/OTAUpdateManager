@@ -22,11 +22,10 @@ bool (*OTAPushUpdateManager::_pullUpdateAvailableCallback)() = nullptr;
 void (*OTAPushUpdateManager::_performUpdateCallback)() = nullptr;
 
 // FreeRTOS
-TaskHandle_t OTAPushUpdateManager::_taskHandle = nullptr;
+TaskHandle_t OTAPushUpdateManager::_webPageTaskHandle = nullptr;
 bool OTAPushUpdateManager::_taskRunning = false;
 uint32_t OTAPushUpdateManager::_taskStackSize = 8192;
 UBaseType_t OTAPushUpdateManager::_taskPriority = 1;
-BaseType_t OTAPushUpdateManager::_taskCore = 1;
 
 // NTP Client
 WiFiUDP *OTAPushUpdateManager::_ntpUDP = nullptr;
@@ -57,7 +56,7 @@ String OTAPushUpdateManager::getPullUpdateStatus()
 
 // ============ IMPLEMENTAÇÃO DOS MÉTODOS FREERTOS ============
 
-void OTAPushUpdateManager::run(uint32_t stackSize, UBaseType_t priority, BaseType_t core)
+void OTAPushUpdateManager::run(uint32_t stackSize, UBaseType_t priority)
 {
     if (_taskRunning)
     {
@@ -67,24 +66,22 @@ void OTAPushUpdateManager::run(uint32_t stackSize, UBaseType_t priority, BaseTyp
 
     _taskStackSize = stackSize;
     _taskPriority = priority;
-    _taskCore = core;
 
     // Cria a task FreeRTOS
-    BaseType_t result = xTaskCreatePinnedToCore(
-        taskFunction,     // Função da task
-        "OTAPushManager", // Nome da task
-        _taskStackSize,   // Stack size
-        nullptr,          // Parâmetros
-        _taskPriority,    // Prioridade
-        &_taskHandle,     // Handle da task
-        _taskCore         // Núcleo
+    BaseType_t result = xTaskCreate(
+        taskFunction,       // Função da task
+        "WebPageTask",      // Nome da task
+        _taskStackSize,     // Stack size
+        nullptr,            // Parâmetros
+        _taskPriority,      // Prioridade
+        &_webPageTaskHandle // Handle da task
     );
 
     if (result == pdPASS)
     {
         _taskRunning = true;
         LOG_INFO("✅ Thread FreeRTOS iniciada (Stack: %u, Priority: %u, Core: %d)",
-                 _taskStackSize, _taskPriority, _taskCore);
+                 _taskStackSize, _taskPriority);
     }
     else
     {
@@ -100,18 +97,23 @@ void OTAPushUpdateManager::stop()
 
 void OTAPushUpdateManager::stopTask()
 {
-    if (_taskHandle != nullptr)
+    if (!_taskRunning)
+    {
+        return;
+    }
+
+    if (_webPageTaskHandle != nullptr)
     {
         _taskRunning = false;
 
         // Aguarda a task terminar (timeout de 2 segundos)
-        if (xTaskGetCurrentTaskHandle() != _taskHandle)
+        if (xTaskGetCurrentTaskHandle() != _webPageTaskHandle)
         {
             // Só deleta se não for a própria task chamando
-            vTaskDelete(_taskHandle);
+            vTaskDelete(_webPageTaskHandle);
         }
 
-        _taskHandle = nullptr;
+        _webPageTaskHandle = nullptr;
         LOG_INFO("🛑 Thread FreeRTOS parada");
     }
 }

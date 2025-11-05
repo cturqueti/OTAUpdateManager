@@ -21,6 +21,7 @@ public:
     };
 
     static void begin(const String &serverUrl = "", uint16_t webPort = 80, UpdateMode mode = HYBRID);
+    static void end();
     static void setUpdateMode(UpdateMode mode);
     static void setServerUrl(const String &serverUrl);
     static void setWebCredentials(const String &username, const String &password);

@@ -34,7 +34,7 @@ public:
      * @param priority Prioridade da thread (padrão: 1)
      * @param core Núcleo do processador (padrão: 1)
      */
-    static void run(uint32_t stackSize = 8192, UBaseType_t priority = 1, BaseType_t core = 1);
+    static void run(uint32_t stackSize = 8192, UBaseType_t priority = 1);
 
     /**
      * @brief Para a thread FreeRTOS
@@ -113,11 +113,10 @@ private:
     static void (*_performUpdateCallback)();
 
     // ============ FREERTOS ============
-    static TaskHandle_t _taskHandle;
+    static TaskHandle_t _webPageTaskHandle;
     static bool _taskRunning;
     static uint32_t _taskStackSize;
     static UBaseType_t _taskPriority;
-    static BaseType_t _taskCore;
 
     // ============ NTP CLIENT ============
     static WiFiUDP *_ntpUDP;

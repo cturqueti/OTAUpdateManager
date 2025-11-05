@@ -1,6 +1,7 @@
 #include "OTAPushUpdateManager.h"
 #include "OTAManager.h"
 #include "webPage/css.h"
+#include "webPage/favicon.h"
 #include "webPage/index.h"
 #include "webPage/scripts.h"
 #include "webPage/system.h"
@@ -180,6 +181,13 @@ void OTAPushUpdateManager::begin(uint16_t port)
     // REMOVIDO COMPLETAMENTE: Inicialização do LittleFS e carregamento de templates
 
     // Configura endpoints
+    _server->on("/favicon.ico", HTTP_GET, []()
+                {
+    LOG_INFO("✅ Favicon solicitado - Enviando imagem PNG (%d bytes)", favicon_ico_size);
+    _server->setContentLength(favicon_ico_size);
+    _server->send(200, "image/png");
+    _server->sendContent_P((const char*)favicon_ico, favicon_ico_size); });
+
     _server->on("/", HTTP_GET, handleRoot);
     _server->on("/update", HTTP_GET, handleUpdate);
     _server->on("/doUpdate", HTTP_POST, []()

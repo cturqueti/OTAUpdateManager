@@ -1,0 +1,148 @@
+#pragma once
+
+/**
+ * @file OTAPushUpdateManager.h
+ * @brief Sistema de atualização OTA via upload web local
+ *
+ * Fornece uma interface web para upload de firmware via browser
+ * Complementa o OTAPullUpdateManager
+ */
+
+#include "LogLibrary.h"
+#include <ESPmDNS.h>
+#include <NTPClient.h>
+#include <Update.h>
+#include <WebServer.h>
+#include <WiFiUdp.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
+class OTAPushUpdateManager
+{
+public:
+    // ============ INTERFACE PÚBLICA ============
+
+    /**
+     * @brief Inicializa o servidor web para OTA
+     * @param port Porta do servidor web (padrão: 80)
+     */
+    static void begin(uint16_t port = 80);
+
+    /**
+     * @brief Inicia thread FreeRTOS para processamento automático
+     * @param stackSize Tamanho da stack da thread (padrão: 8192)
+     * @param priority Prioridade da thread (padrão: 1)
+     * @param core Núcleo do processador (padrão: 1)
+     */
+    static void run(uint32_t stackSize = 8192, UBaseType_t priority = 1, BaseType_t core = 1);
+
+    /**
+     * @brief Para a thread FreeRTOS
+     */
+    static void stop();
+
+    /**
+     * @brief Configura mDNS para acesso fácil
+     * @param hostname Nome para acesso via mDNS (ex: "esp32-ota")
+     */
+    static void setMDNS(const String &hostname);
+
+    /**
+     * @brief Define credenciais de acesso
+     * @param username Usuário para autenticação
+     * @param password Senha para autenticação
+     */
+    static void setCredentials(const String &username, const String &password);
+
+    /**
+     * @brief Processa requisições do servidor web
+     * Deve ser chamado no loop() principal se não usar run()
+     */
+    static void handleClient();
+
+    /**
+     * @brief Retorna se está atualizando
+     */
+    static bool isUpdating();
+
+    /**
+     * @brief Retorna se o servidor está ativo
+     */
+    static bool isRunning();
+
+    /**
+     * @brief Retorna URL de acesso
+     */
+    static String getAccessURL();
+
+    /**
+     * @brief Atualiza o NTP client (deve ser chamado no loop)
+     */
+    static void updateTime();
+
+    /**
+     * @brief Obtém data/hora atual formatada do ESP32
+     */
+    static String getCurrentDateTime();
+
+    /**
+     * @brief Obtém timestamp atual
+     */
+    static unsigned long getCurrentTimestamp();
+
+    /**
+     * @brief Formata tempo em string legível
+     */
+    static String formatTime(unsigned long rawTime);
+
+    static void setPullUpdateCallback(bool (*callback)());
+    static void setPerformUpdateCallback(void (*callback)());
+    static String getPullUpdateStatus();
+
+private:
+    // ============ VARIÁVEIS DE ESTADO ============
+    static WebServer *_server;
+    static bool _updating;
+    static String _username;
+    static String _password;
+    static bool _authenticated;
+    static bool _running;
+    static String _mdnsHostname;
+
+    static bool (*_pullUpdateAvailableCallback)();
+    static void (*_performUpdateCallback)();
+
+    // ============ FREERTOS ============
+    static TaskHandle_t _taskHandle;
+    static bool _taskRunning;
+    static uint32_t _taskStackSize;
+    static UBaseType_t _taskPriority;
+    static BaseType_t _taskCore;
+
+    // ============ NTP CLIENT ============
+    static WiFiUDP *_ntpUDP;
+    static NTPClient *_timeClient;
+    static bool _timeSynced;
+
+    // ============ MÉTODOS PRIVADOS ============
+    static void handleRoot();
+    static void handleUpdate();
+    static void handleDoUpload();
+    static void handleSystemInfo();
+    static void handleToggleTheme();
+    static bool checkAuthentication();
+
+    // Thread FreeRTOS
+    static void taskFunction(void *parameter);
+    static void stopTask();
+
+    static String resetReason(esp_reset_reason_t reset);
+    static String getSystemInfoContent();
+    static String getFullSystemInfoContent();
+    static String processTemplate(const String &templateHTML, const String &title, const String &content, bool darkMode);
+    static String formatUptime(unsigned long milliseconds);
+    static String formatBuildDate();
+
+    static String extractVersionFromBinary(const uint8_t *data, size_t length);
+    static bool isValidVersion(const String &version);
+};

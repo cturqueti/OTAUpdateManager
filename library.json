@@ -1,0 +1,33 @@
+{
+  "name": "OTAUpdateManager",
+  "version": "1.0.0",
+  "description": "Complete ESP32 OTA firmware update solution with web interface and HTTP pull updates",
+  "keywords": "esp32, ota, update, firmware, http, pull, push, wireless, web, interface",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cturqueti/OTAUpdateManager.git"
+  },
+  "authors": [
+    {
+      "name": "Carlos Augusto Dorazio Turqueti",
+      "email": "carlosturqueti@gmail.com",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/cturqueti/OTAUpdateManager",
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "dependencies": {
+    "bblanchon/ArduinoJson": "^6.21.0",
+    "me-no-dev/AsyncTCP": "^1.1.1",
+    "cturqueti/LogLibrary": "^1.0.0",
+    "me-no-dev/ESPAsyncWebServer": "^1.2.3"
+  },
+  "export": {
+    "include": [
+      "src/*",
+      "webPage/*"
+    ]
+  }
+}

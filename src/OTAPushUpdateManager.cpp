@@ -2,6 +2,7 @@
 #include "OTAManager.h"
 #include "webPage/css.h"
 #include "webPage/favicon.h"
+#include "webPage/filesystem.h"
 #include "webPage/index.h"
 #include "webPage/scripts.h"
 #include "webPage/system.h"
@@ -156,6 +157,51 @@ void OTAPushUpdateManager::begin(uint16_t port)
         _server = new WebServer(port);
     }
 
+    // ✅ CORREÇÃO: Inicialização robusta do LittleFS
+    if (!LittleFS.begin(true))
+    {
+        LOG_ERROR("❌ Falha ao inicializar LittleFS - Tentando formatar...");
+
+        // Tenta formatar se a inicialização falhar
+        if (LittleFS.format())
+        {
+            LOG_INFO("✅ LittleFS formatado com sucesso");
+            if (LittleFS.begin(true))
+            {
+                LOG_INFO("✅ LittleFS inicializado após formatação");
+            }
+            else
+            {
+                LOG_ERROR("❌ Falha crítica: LittleFS não pode ser inicializado");
+                return; // Não continua se o filesystem não funcionar
+            }
+        }
+        else
+        {
+            LOG_ERROR("❌ Falha crítica: Não foi possível formatar LittleFS");
+            return;
+        }
+    }
+    else
+    {
+        LOG_INFO("✅ LittleFS inicializado com sucesso");
+
+        // Verifica se pode escrever no filesystem
+        File testFile = LittleFS.open("/test_write.txt", "w");
+        if (!testFile)
+        {
+            LOG_ERROR("❌ LittleFS montado mas sem permissão de escrita");
+        }
+        else
+        {
+            testFile.println("Teste de escrita");
+            testFile.close();
+            LittleFS.remove("/test_write.txt");
+            LOG_INFO("✅ LittleFS com permissão de escrita verificada");
+        }
+    }
+
+    // Resto do código permanece igual...
     // Configura o timezone e servidor NTP do sistema
     configTime(-3 * 3600, 0, "pool.ntp.org", "time.nist.gov"); // UTC-3 (Brasília)
 
@@ -178,15 +224,13 @@ void OTAPushUpdateManager::begin(uint16_t port)
         }
     }
 
-    // REMOVIDO COMPLETAMENTE: Inicialização do LittleFS e carregamento de templates
-
-    // Configura endpoints
+    // Configura endpoints (o resto do código permanece igual)...
     _server->on("/favicon.ico", HTTP_GET, []()
                 {
-    LOG_INFO("✅ Favicon solicitado - Enviando imagem PNG (%d bytes)", favicon_ico_size);
-    _server->setContentLength(favicon_ico_size);
-    _server->send(200, "image/png");
-    _server->sendContent_P((const char*)favicon_ico, favicon_ico_size); });
+        LOG_INFO("✅ Favicon solicitado - Enviando imagem PNG (%d bytes)", favicon_ico_size);
+        _server->setContentLength(favicon_ico_size);
+        _server->send(200, "image/png");
+        _server->sendContent_P((const char*)favicon_ico, favicon_ico_size); });
 
     _server->on("/", HTTP_GET, handleRoot);
     _server->on("/update", HTTP_GET, handleUpdate);
@@ -194,43 +238,52 @@ void OTAPushUpdateManager::begin(uint16_t port)
                 { OTAPushUpdateManager::_server->send(200, "text/plain", "Upload processed"); }, handleDoUpload);
     _server->on("/system", HTTP_GET, handleSystemInfo);
     _server->on("/toggle-theme", HTTP_GET, handleToggleTheme);
+
+    // File System Routes
+    _server->on("/filesystem", HTTP_GET, handleFilesystem);
+    _server->on("/filesystem-upload", HTTP_POST, []()
+                { _server->send(200, "application/json", "{\"status\":\"success\", \"message\":\"Upload completed\"}"); }, handleFilesystemUpload);
+    _server->on("/filesystem-delete", HTTP_POST, handleFilesystemDelete);
+    _server->on("/filesystem-mkdir", HTTP_POST, handleFilesystemMkdir);
+    _server->on("/filesystem-download", HTTP_GET, handleFilesystemDownload);
+
     _server->on("/check-updates", HTTP_GET, []()
                 {
-    if (!checkAuthentication()) {
-        return;
-    }
-    
-    OTAManager::checkForUpdates();
-    String status = "";
-    
-    if (OTAManager::isUpdateAvailable()) {
-        String latestVersion = OTAManager::getLatestVersion();
-        String currentVersion = OTAPullUpdateManager::getCurrentVersion();
-        status = "🎯 Nova versão disponível: v" + latestVersion + " (atual: v" + currentVersion + ")";
-    } else {
-        status = "✅ Firmware está atualizado (v" + OTAPullUpdateManager::getCurrentVersion() + ")";
-    }
-    
-    _server->send(200, "application/json", 
-        "{\"status\":\"success\", \"message\":\"" + status + "\"}"); });
+        if (!checkAuthentication()) {
+            return;
+        }
+        
+        OTAManager::checkForUpdates();
+        String status = "";
+        
+        if (OTAManager::isUpdateAvailable()) {
+            String latestVersion = OTAManager::getLatestVersion();
+            String currentVersion = OTAPullUpdateManager::getCurrentVersion();
+            status = "🎯 Nova versão disponível: v" + latestVersion + " (atual: v" + currentVersion + ")";
+        } else {
+            status = "✅ Firmware está atualizado (v" + OTAPullUpdateManager::getCurrentVersion() + ")";
+        }
+        
+        _server->send(200, "application/json", 
+            "{\"status\":\"success\", \"message\":\"" + status + "\"}"); });
 
     _server->on("/perform-update", HTTP_GET, []()
                 {
-    if (!checkAuthentication()) {
-        return;
-    }
-    
-    if (OTAManager::isUpdateAvailable()) {
-        _server->send(200, "application/json", 
-            "{\"status\":\"success\", \"message\":\"Iniciando atualização...\"}");
+        if (!checkAuthentication()) {
+            return;
+        }
         
-        // Pequeno delay para enviar a resposta antes de reiniciar
-        delay(1000);
-        OTAManager::performUpdate();
-    } else {
-        _server->send(400, "application/json", 
-            "{\"status\":\"error\", \"message\":\"Nenhuma atualização disponível\"}");
-    } });
+        if (OTAManager::isUpdateAvailable()) {
+            _server->send(200, "application/json", 
+                "{\"status\":\"success\", \"message\":\"Iniciando atualização...\"}");
+            
+            // Pequeno delay para enviar a resposta antes de reiniciar
+            delay(1000);
+            OTAManager::performUpdate();
+        } else {
+            _server->send(400, "application/json", 
+                "{\"status\":\"error\", \"message\":\"Nenhuma atualização disponível\"}");
+        } });
 
     // Inicia servidor
     _server->begin();
@@ -519,9 +572,11 @@ void OTAPushUpdateManager::handleToggleTheme()
 
     String currentTheme = _server->hasArg("theme") ? _server->arg("theme") : "light";
     String newTheme = (currentTheme == "light") ? "dark" : "light";
+
+    // ✅ CORREÇÃO: Manter o path quando disponível
     String currentPath = _server->hasArg("path") ? _server->arg("path") : "/";
 
-    _server->sendHeader("Location", currentPath + "?theme=" + newTheme, true);
+    _server->sendHeader("Location", "/filesystem?path=" + currentPath + "&theme=" + newTheme, true);
     _server->send(302, "text/plain", "");
 }
 
@@ -830,6 +885,11 @@ String OTAPushUpdateManager::getSystemInfoContent()
     content += "<h3>System Info</h3>";
     content += "<p>Complete ESP32 details</p>";
     content += "</a>";
+    content += "<a href=\"/filesystem\" class=\"action-card\">";
+    content += "<div class=\"action-icon\">📁</div>";
+    content += "<h3>File Manager</h3>";
+    content += "<p>Gerenciar arquivos LittleFS</p>";
+    content += "</a>";
     content += "</div>";
 
     return content;
@@ -855,7 +915,7 @@ String OTAPushUpdateManager::processTemplate(const String &templateHTML, const S
     // Substitui placeholders PRINCIPAIS
     html.replace("{{TITLE}}", title);
     html.replace("{{CONTENT}}", content);
-    html.replace("{{THEME}}", isDarkMode ? "dark" : "light"); // ✅ USA VARIÁVEL CORRIGIDA
+    html.replace("{{THEME}}", isDarkMode ? "dark" : "light");
     html.replace("{{THEME_BUTTON}}", isDarkMode ? "☀️" : "🌙");
     html.replace("{{HOST_INFO}}", _mdnsHostname != "" ? _mdnsHostname + ".local" : WiFi.localIP().toString());
 
@@ -917,6 +977,602 @@ String OTAPushUpdateManager::resetReason(esp_reset_reason_t reset)
     };
 }
 
+// Adicione este novo handler após os outros handlers do filesystem:
+
+void OTAPushUpdateManager::handleFilesystemDownload()
+{
+    if (!checkAuthentication())
+        return;
+
+    if (!_server->hasArg("path"))
+    {
+        _server->send(400, "text/plain", "Caminho do arquivo não especificado");
+        return;
+    }
+
+    String filePath = _server->arg("path");
+
+    if (!isLittleFSMounted())
+    {
+        _server->send(500, "text/plain", "Sistema de arquivos não disponível");
+        return;
+    }
+
+    // ✅ VERIFICAÇÃO: Garantir que o path é válido
+    if (filePath.length() == 0 || filePath == "/")
+    {
+        _server->send(400, "text/plain", "Caminho inválido");
+        return;
+    }
+
+    File file = LittleFS.open(filePath, "r");
+    if (!file)
+    {
+        _server->send(404, "text/plain", "Arquivo não encontrado: " + filePath);
+        return;
+    }
+
+    if (file.isDirectory())
+    {
+        file.close();
+        _server->send(400, "text/plain", "Não é possível baixar uma pasta");
+        return;
+    }
+
+    // Extrai apenas o nome do arquivo do caminho completo
+    String fileName = filePath;
+    int lastSlash = fileName.lastIndexOf('/');
+    if (lastSlash != -1)
+    {
+        fileName = fileName.substring(lastSlash + 1);
+    }
+
+    LOG_INFO("📥 Iniciando download do arquivo: %s (%d bytes)", filePath.c_str(), file.size());
+
+    // ✅ CORREÇÃO CRÍTICA: Configurar headers corretamente para download
+    _server->setContentLength(file.size());
+
+    // ✅ HEADERS CORRETOS para forçar download
+    _server->sendHeader("Content-Type", "application/octet-stream");
+    _server->sendHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+    _server->sendHeader("Content-Transfer-Encoding", "binary");
+    _server->sendHeader("Cache-Control", "no-cache");
+    _server->sendHeader("Pragma", "no-cache");
+    _server->sendHeader("Expires", "0");
+
+    // ✅ Enviar status 200 antes do conteúdo
+    _server->send(200);
+
+    // ✅ Enviar o arquivo em chunks menores
+    uint8_t buffer[512]; // Tamanho menor para melhor controle
+    size_t totalSent = 0;
+
+    while (file.available())
+    {
+        size_t bytesRead = file.read(buffer, sizeof(buffer));
+        if (bytesRead > 0)
+        {
+            // ✅ Usar sendContent (não sendContent_P) para dados dinâmicos
+            _server->sendContent((const char *)buffer, bytesRead);
+            totalSent += bytesRead;
+        }
+
+        // ✅ Pequena pausa para estabilidade
+        delay(1);
+    }
+
+    file.close();
+
+    LOG_INFO("✅ Download concluído: %s (%d bytes enviados)", filePath.c_str(), totalSent);
+
+    // ✅ NÃO chamar client().stop() - deixa o servidor fechar naturalmente
+}
+
+void OTAPushUpdateManager::handleFilesystem()
+{
+    if (!checkAuthentication())
+        return;
+
+    String theme = _server->hasArg("theme") ? _server->arg("theme") : "dark";
+    bool darkMode = (theme == "dark");
+
+    String path = _server->hasArg("path") ? _server->arg("path") : "/";
+    if (!path.startsWith("/"))
+    {
+        path = "/" + path;
+    }
+
+    String content = getFilesystemContent(path);
+
+    // Processa o template específico do filesystem
+    String html = htmlFilesystem;
+
+    bool isDarkMode = darkMode;
+    if (!_server->hasArg("theme"))
+    {
+        isDarkMode = true; // ✅ PADRÃO DARK
+    }
+
+    html.replace("{{TITLE}}", "File Manager");
+    html.replace("{{CONTENT}}", content);
+    html.replace("{{THEME}}", isDarkMode ? "dark" : "light");
+    html.replace("{{THEME_BUTTON}}", isDarkMode ? "☀️" : "🌙");
+    html.replace("{{HOST_INFO}}", _mdnsHostname != "" ? _mdnsHostname + ".local" : WiFi.localIP().toString());
+    html.replace("{{CSS}}", cssStyles);
+    html.replace("{{JS}}", jsScript);
+    html.replace("{{ESP32_TIME}}", getCurrentDateTime());
+    html.replace("{{UPTIME}}", formatUptime(millis()));
+    html.replace("{{BREADCRUMB}}", generateBreadcrumb(path));
+    html.replace("{{CURRENT_PATH}}", path);
+    html.replace("{{FILE_LIST}}", generateFileList(path));
+
+    _server->send(200, "text/html", html);
+}
+
+void OTAPushUpdateManager::handleFilesystemUpload()
+{
+    if (!checkAuthentication())
+        return;
+
+    // ✅ VERIFICA SE O FILESYSTEM ESTÁ MONTADO
+    if (!isLittleFSMounted())
+    {
+        _server->send(500, "application/json",
+                      "{\"status\":\"error\", \"message\":\"Sistema de arquivos não disponível\"}");
+        return;
+    }
+
+    HTTPUpload &upload = _server->upload();
+    static String uploadPath = "/"; // Padrão para raiz
+
+    if (upload.status == UPLOAD_FILE_START)
+    {
+        // Obtém o path do formulário ou usa o padrão
+        if (_server->hasArg("path"))
+        {
+            uploadPath = _server->arg("path");
+
+            // ✅ CORREÇÃO CRÍTICA: Garantir que o path comece com / e não termine com /
+            if (!uploadPath.startsWith("/"))
+            {
+                uploadPath = "/" + uploadPath;
+            }
+            if (uploadPath.endsWith("/") && uploadPath != "/")
+            {
+                uploadPath = uploadPath.substring(0, uploadPath.length() - 1);
+            }
+        }
+        else
+        {
+            uploadPath = "/";
+        }
+
+        LOG_INFO("📤 Iniciando upload para: %s/%s", uploadPath.c_str(), upload.filename.c_str());
+    }
+    else if (upload.status == UPLOAD_FILE_WRITE)
+    {
+        // ✅ VERIFICA NOVAMENTE ANTES DE ESCREVER
+        if (!isLittleFSMounted())
+        {
+            LOG_ERROR("❌ Filesystem não disponível durante upload");
+            return;
+        }
+
+        // ✅ CORREÇÃO: Construir o caminho completo corretamente
+        String fullPath;
+        if (uploadPath == "/")
+        {
+            fullPath = "/" + upload.filename;
+        }
+        else
+        {
+            fullPath = uploadPath + "/" + upload.filename;
+        }
+
+        // ✅ CORREÇÃO: Criar diretórios se necessário
+        String dirPath = getDirectoryPath(fullPath);
+
+        if (!LittleFS.exists(dirPath))
+        {
+            LOG_INFO("📁 Criando diretório: %s", dirPath.c_str());
+            if (!createDirectories(dirPath))
+            {
+                LOG_ERROR("❌ Falha ao criar diretório: %s", dirPath.c_str());
+                return;
+            }
+        }
+
+        // ✅ CORREÇÃO: Abrir arquivo no modo append para escrever em chunks
+        File file = LittleFS.open(fullPath, "a");
+        if (file)
+        {
+            size_t written = file.write(upload.buf, upload.currentSize);
+            file.close();
+            LOG_DEBUG("📝 Escritos %d bytes em: %s", written, fullPath.c_str());
+        }
+        else
+        {
+            LOG_ERROR("❌ Não foi possível criar/abrir arquivo: %s", fullPath.c_str());
+        }
+    }
+    else if (upload.status == UPLOAD_FILE_END)
+    {
+        LOG_INFO("✅ Upload concluído: %s/%s (%u bytes)",
+                 uploadPath.c_str(), upload.filename.c_str(), upload.totalSize);
+        _server->send(200, "application/json",
+                      "{\"status\":\"success\", \"message\":\"Arquivo salvo com sucesso\"}");
+    }
+    else if (upload.status == UPLOAD_FILE_ABORTED)
+    {
+        LOG_ERROR("❌ Upload abortado: %s/%s", uploadPath.c_str(), upload.filename.c_str());
+        _server->send(500, "application/json",
+                      "{\"status\":\"error\", \"message\":\"Upload abortado\"}");
+    }
+}
+
+String OTAPushUpdateManager::getDirectoryPath(const String &fullPath)
+{
+    int lastSlash = fullPath.lastIndexOf('/');
+    if (lastSlash <= 0)
+    {
+        return "/";
+    }
+    return fullPath.substring(0, lastSlash);
+}
+
+bool OTAPushUpdateManager::createDirectories(const String &path)
+{
+    if (path == "/" || path == "")
+    {
+        return true;
+    }
+
+    if (LittleFS.exists(path))
+    {
+        return true;
+    }
+
+    // Cria diretórios recursivamente
+    String currentPath = "";
+    int start = 0;
+
+    while (start < path.length())
+    {
+        int end = path.indexOf('/', start + 1);
+        if (end == -1)
+        {
+            end = path.length();
+        }
+
+        String part = path.substring(start, end);
+        currentPath += part;
+
+        if (!LittleFS.exists(currentPath) && currentPath != "/")
+        {
+            if (!LittleFS.mkdir(currentPath))
+            {
+                LOG_ERROR("❌ Falha ao criar diretório: %s", currentPath.c_str());
+                return false;
+            }
+            LOG_DEBUG("📁 Diretório criado: %s", currentPath.c_str());
+        }
+
+        start = end;
+    }
+
+    return true;
+}
+
+void OTAPushUpdateManager::handleFilesystemDelete()
+{
+    if (!checkAuthentication())
+        return;
+
+    if (!isLittleFSMounted())
+    {
+        _server->send(500, "application/json",
+                      "{\"status\":\"error\", \"message\":\"Sistema de arquivos não disponível\"}");
+        return;
+    }
+
+    String path = _server->arg("path");
+    bool isDir = _server->arg("isDir") == "true";
+
+    if (path == "" || path == "/")
+    {
+        _server->send(400, "application/json",
+                      "{\"status\":\"error\", \"message\":\"Caminho inválido\"}");
+        return;
+    }
+
+    LOG_INFO("🗑️ Excluindo: %s (isDir: %d)", path.c_str(), isDir);
+
+    if (isDir)
+    {
+        if (LittleFS.rmdir(path))
+        {
+            _server->send(200, "application/json",
+                          "{\"status\":\"success\", \"message\":\"Pasta excluída com sucesso\"}");
+        }
+        else
+        {
+            _server->send(500, "application/json",
+                          "{\"status\":\"error\", \"message\":\"Falha ao excluir pasta\"}");
+        }
+    }
+    else
+    {
+        if (LittleFS.remove(path))
+        {
+            _server->send(200, "application/json",
+                          "{\"status\":\"success\", \"message\":\"Arquivo excluído com sucesso\"}");
+        }
+        else
+        {
+            _server->send(500, "application/json",
+                          "{\"status\":\"error\", \"message\":\"Falha ao excluir arquivo\"}");
+        }
+    }
+}
+
+void OTAPushUpdateManager::handleFilesystemMkdir()
+{
+    if (!checkAuthentication())
+        return;
+
+    if (!isLittleFSMounted())
+    {
+        _server->send(500, "application/json",
+                      "{\"status\":\"error\", \"message\":\"Sistema de arquivos não disponível\"}");
+        return;
+    }
+
+    String path = _server->arg("path");
+
+    if (path == "" || LittleFS.exists(path))
+    {
+        _server->send(400, "application/json",
+                      "{\"status\":\"error\", \"message\":\"Caminho inválido ou já existe\"}");
+        return;
+    }
+
+    LOG_INFO("📁 Criando pasta: %s", path.c_str());
+
+    if (LittleFS.mkdir(path))
+    {
+        _server->send(200, "application/json",
+                      "{\"status\":\"success\", \"message\":\"Pasta criada com sucesso\"}");
+    }
+    else
+    {
+        _server->send(500, "application/json",
+                      "{\"status\":\"error\", \"message\":\"Falha ao criar pasta\"}");
+    }
+}
+
+String OTAPushUpdateManager::getFilesystemContent(const String &currentPath)
+{
+    String content = "";
+
+    // Breadcrumb navigation
+    content += generateBreadcrumb(currentPath);
+
+    // File list
+    content += generateFileList(currentPath);
+
+    return content;
+}
+
+String OTAPushUpdateManager::generateBreadcrumb(const String &currentPath)
+{
+    String breadcrumb = "";
+    String accumulatedPath = "";
+
+    // ✅ OBTER O TEMA ATUAL para incluir nos links
+    String theme = _server->hasArg("theme") ? _server->arg("theme") : "dark";
+
+    // Split path into parts
+    String path = currentPath;
+    if (path.endsWith("/") && path != "/")
+    {
+        path = path.substring(0, path.length() - 1);
+    }
+
+    // Se for a raiz, não mostra breadcrumb adicional
+    if (path == "/")
+    {
+        return "";
+    }
+
+    int start = 0;
+    while (start < path.length())
+    {
+        int end = path.indexOf('/', start + 1);
+        if (end == -1)
+            end = path.length();
+
+        String part = path.substring(start, end);
+        accumulatedPath += part;
+
+        if (part != "/" && part != "")
+        {
+            String displayName = part;
+            if (displayName.startsWith("/"))
+            {
+                displayName = displayName.substring(1);
+            }
+            // ✅ CORREÇÃO: Incluir o tema no breadcrumb
+            breadcrumb += " / <a href=\"/filesystem?path=" + accumulatedPath + "&theme=" + theme + "\">" + displayName + "</a>";
+        }
+
+        start = end;
+    }
+
+    return breadcrumb;
+}
+
+String OTAPushUpdateManager::generateFileList(const String &currentPath)
+{
+    String fileList = "";
+    bool hasFiles = false;
+
+    if (!isLittleFSMounted())
+    {
+        return "<div class=\"empty-state\"><div class=\"icon\">❌</div><p>Erro: Sistema de arquivos não disponível</p></div>";
+    }
+
+    File root = LittleFS.open(currentPath);
+    if (!root)
+    {
+        return "<div class=\"empty-state\"><div class=\"icon\">❌</div><p>Erro ao acessar o diretório</p></div>";
+    }
+
+    if (!root.isDirectory())
+    {
+        root.close();
+        return "<div class=\"empty-state\"><div class=\"icon\">📄</div><p>Não é um diretório</p></div>";
+    }
+
+    // ✅ OBTER O TEMA ATUAL para incluir nos links
+    String theme = _server->hasArg("theme") ? _server->arg("theme") : "dark";
+
+    fileList += "<table class=\"file-list\">";
+    fileList += "<thead><tr><th>Nome</th><th>Tamanho</th><th>Tipo</th><th>Ações</th></tr></thead><tbody>";
+
+    // Primeiro lista os diretórios
+    File file = root.openNextFile();
+    while (file)
+    {
+        if (file.isDirectory())
+        {
+            hasFiles = true;
+            String fileName = String(file.name());
+
+            // Remove o caminho atual do nome de exibição
+            if (fileName.startsWith(currentPath))
+            {
+                fileName = fileName.substring(currentPath.length());
+            }
+            if (fileName.endsWith("/"))
+            {
+                fileName = fileName.substring(0, fileName.length() - 1);
+            }
+
+            String fullPath = currentPath;
+            if (!fullPath.endsWith("/"))
+                fullPath += "/";
+            fullPath += fileName;
+
+            fileList += "<tr class=\"file-item\">";
+            fileList += "<td><span class=\"file-icon\">📁</span>";
+
+            // ✅ CORREÇÃO: Incluir o tema no link de navegação
+            fileList += "<a href=\"/filesystem?path=" + fullPath + "&theme=" + theme + "\" style=\"text-decoration: none; color: inherit;\">";
+            fileList += "<div style=\"padding: 8px; border-radius: 4px; cursor: pointer; display: inline-block;\">";
+            fileList += fileName;
+            fileList += "</div>";
+            fileList += "</a>";
+
+            fileList += "</td>";
+            fileList += "<td>-</td>";
+            fileList += "<td>Pasta</td>";
+            fileList += "<td class=\"file-actions-cell\">";
+            fileList += "<button class=\"btn btn-sm btn-primary\" onclick=\"downloadFile('" +
+                        fullPath + "')\" title=\"Baixar arquivo\">⬇️</button>";
+            fileList += "<button class=\"btn btn-sm btn-danger\" onclick=\"showDeleteModal('" +
+                        fullPath + "', false, '" + fileName + "')\">🗑️</button>";
+            fileList += "</td></tr>";
+        }
+        file = root.openNextFile();
+    }
+
+    root.rewindDirectory();
+
+    // Depois lista os arquivos
+    file = root.openNextFile();
+    while (file)
+    {
+        if (!file.isDirectory())
+        {
+            hasFiles = true;
+            String fileName = String(file.name());
+
+            // Remove o caminho atual do nome de exibição
+            if (fileName.startsWith(currentPath))
+            {
+                fileName = fileName.substring(currentPath.length());
+            }
+
+            String fullPath = currentPath;
+            if (!fullPath.endsWith("/"))
+                fullPath += "/";
+            fullPath += fileName;
+
+            fileList += "<tr class=\"file-item\">";
+            fileList += "<td><span class=\"file-icon\">📄</span>";
+            fileList += "<div style=\"padding: 8px;\">" + fileName + "</div>";
+            fileList += "</td>";
+            fileList += "<td>" + formatFileSize(file.size()) + "</td>";
+            fileList += "<td>" + getFileExtension(fileName) + "</td>";
+
+            fileList += "<td class=\"file-actions-cell\">";
+            fileList += "<button class=\"btn btn-sm btn-primary\" onclick=\"downloadFile('" +
+                        fullPath + "')\" title=\"Baixar arquivo\">⬇️</button>";
+            fileList += "<button class=\"btn btn-sm btn-danger\" onclick=\"showDeleteModal('" +
+                        fullPath + "', false, '" + fileName + "')\">🗑️</button>";
+            fileList += "</td></tr>";
+        }
+        file = root.openNextFile();
+    }
+
+    fileList += "</tbody></table>";
+    root.close();
+
+    if (!hasFiles)
+    {
+        return "<div class=\"empty-state\"><div class=\"icon\">📁</div><p>Pasta vazia</p></div>";
+    }
+
+    return fileList;
+}
+
+String OTAPushUpdateManager::formatFileSize(size_t bytes)
+{
+    if (bytes < 1024)
+        return String(bytes) + " B";
+    else if (bytes < 1024 * 1024)
+        return String(bytes / 1024.0, 1) + " KB";
+    else
+        return String(bytes / (1024.0 * 1024.0), 1) + " MB";
+}
+
+String OTAPushUpdateManager::getFileExtension(const String &filename)
+{
+    int dotIndex = filename.lastIndexOf('.');
+    if (dotIndex == -1)
+        return "Arquivo";
+
+    String ext = filename.substring(dotIndex + 1);
+    ext.toLowerCase();
+
+    if (ext == "txt" || ext == "log")
+        return "Texto";
+    else if (ext == "json")
+        return "JSON";
+    else if (ext == "html" || ext == "htm")
+        return "HTML";
+    else if (ext == "css")
+        return "CSS";
+    else if (ext == "js")
+        return "JavaScript";
+    else if (ext == "bin")
+        return "Binário";
+    else if (ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "gif")
+        return "Imagem";
+    else
+        return ext + " File";
+}
+
 String OTAPushUpdateManager::getFullSystemInfoContent()
 {
     String content = "";
@@ -976,4 +1632,14 @@ String OTAPushUpdateManager::getFullSystemInfoContent()
     content += "</div>";
 
     return content;
+}
+
+bool OTAPushUpdateManager::isLittleFSMounted()
+{
+    if (!LittleFS.begin(true))
+    {
+        LOG_ERROR("❌ LittleFS não está montado");
+        return false;
+    }
+    return true;
 }

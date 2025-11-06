@@ -100,6 +100,11 @@ public:
     static void setPerformUpdateCallback(void (*callback)());
     static String getPullUpdateStatus();
 
+    static void handleFilesystem();
+    static void handleFilesystemUpload();
+    static void handleFilesystemDelete();
+    static void handleFilesystemMkdir();
+
 private:
     // ============ VARIÁVEIS DE ESTADO ============
     static WebServer *_server;
@@ -145,4 +150,15 @@ private:
 
     static String extractVersionFromBinary(const uint8_t *data, size_t length);
     static bool isValidVersion(const String &version);
+
+    static String getFilesystemContent(const String &currentPath);
+    static String generateBreadcrumb(const String &currentPath);
+    static String generateFileList(const String &currentPath);
+    static String formatFileSize(size_t bytes);
+    static String getFileExtension(const String &filename);
+    static void handleFilesystemDownload();
+
+    static bool isLittleFSMounted();
+    static String getDirectoryPath(const String &fullPath);
+    static bool createDirectories(const String &path);
 };

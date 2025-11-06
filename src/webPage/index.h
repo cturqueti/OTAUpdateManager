@@ -7,9 +7,9 @@ const char *htmlIndex = R"rawliteral(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{TITLE}}</title>
-    <link rel="icon" type="image/png" href="/favicon.ico">
-    <link rel="shortcut icon" type="image/png" href="/favicon.ico">
-    <link rel="apple-touch-icon" type="image/png" href="/favicon.ico">
+    <link rel="icon" type="image/png" href="/assets/favicon.png">
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/scripts.js"></script>
     <style>{{CSS}}</style>
 </head>
 <body class="{{THEME}}">

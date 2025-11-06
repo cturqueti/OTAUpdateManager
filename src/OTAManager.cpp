@@ -1,5 +1,7 @@
 #include "OTAManager.h"
 
+#include "handlers/WebAssetManager.h"
+
 // Inicialização de variáveis estáticas
 OTAManager::UpdateMode OTAManager::_currentMode = OTAManager::HYBRID;
 String OTAManager::_serverUrl = "";
@@ -15,6 +17,21 @@ void OTAManager::begin(const String &serverUrl, uint16_t webPort, UpdateMode mod
 
     // Sempre inicia o sistema Push (web)
     OTAPushUpdateManager::begin(webPort);
+
+    LOG_INFO("📝 Chamando WebAssetManager::setupRoutes()");
+    AsyncWebServer *server = OTAPushUpdateManager::getServer();
+    if (server)
+    {
+        LOG_INFO("🔍 Server obtido: %p", server);
+        WebAssetManager::setupRoutes(server);
+    }
+    else
+    {
+        LOG_ERROR("❌ Não foi possível obter o server do OTAPushUpdateManager");
+    }
+
+    LOG_INFO("📝 Chamando WebAssetManager::checkRequiredAssets()");
+    WebAssetManager::checkRequiredAssets();
 
     // ✅ ADICIONAR: Configurar callbacks para o sistema Push
     OTAPushUpdateManager::setPullUpdateCallback([]() -> bool

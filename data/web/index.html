@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 OTA Update</title>
+    <link rel="icon" type="image/png" href="/assets/icons/favicon.png">
+    <link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+<body class="dark">
+    <div class="container">
+        <nav class="navbar">
+            <a href="/" class="nav-brand">OTA Update</a>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/update">Upload</a>
+                <a href="/system">System</a>
+                <button class="theme-toggle nav-toggle" onclick="toggleTheme()">
+                    ☀️
+                </button>
+            </div>
+        </nav>
+        
+        <main class="main-content">
+            <div class="header">
+                <div class="header-left">
+                    <h1>ESP32 OTA Update</h1>
+                    <div class="time-info">
+                        <div class="system-time" id="currentTime">Carregando...</div>
+                        <div class="uptime" id="uptime">Uptime: Carregando...</div>
+                    </div>
+                </div>
+                <button class="theme-toggle" onclick="toggleTheme()">
+                    ☀️
+                </button>
+            </div>
+            
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3>WiFi</h3>
+                    <p><strong>IP:</strong> <span id="ipAddress">Carregando...</span></p>
+                    <p><strong>SSID:</strong> <span id="ssid">Carregando...</span></p>
+                </div>
+                
+                <div class="info-card">
+                    <h3>System</h3>
+                    <p><strong>Version:</strong> <span id="firmwareVersion">Carregando...</span></p>
+                    <p><strong>Heap Free:</strong> <span id="heapFree">Carregando...</span></p>
+                    <p><strong>CPU:</strong> <span id="cpuFreq">Carregando...</span></p>
+                </div>
+                
+                <div class="info-card" style="display: flex; flex-direction: column; justify-content: center;">
+                    <h3>🔄 OTA Remoto</h3>
+                    <div id="otaStatus">
+                        <p style="text-align: center; color: var(--success); font-size: 0.9rem; margin: 0.5rem 0;">
+                            ✅ Verificando...
+                        </p>
+                        <div style="text-align: center; margin: 0.5rem 0;">
+                            <button class="btn" style="background: var(--accent-primary); padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="checkForUpdates()">
+                                🔍 Verificar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-grid">
+                <a href="/update" class="action-card">
+                    <div class="action-icon">📤</div>
+                    <h3>Firmware Upload</h3>
+                    <p>Send new .bin firmware</p>
+                </a>
+                <a href="/system" class="action-card">
+                    <div class="action-icon">ℹ️</div>
+                    <h3>System Info</h3>
+                    <p>Complete ESP32 details</p>
+                </a>
+                <a href="/filesystem" class="action-card">
+                    <div class="action-icon">📁</div>
+                    <h3>File Manager</h3>
+                    <p>Gerenciar arquivos LittleFS</p>
+                </a>
+            </div>
+        </main>
+        
+        <footer class="footer">
+            <p>ESP32 OTA Update - <span id="hostInfo">Carregando...</span></p>
+        </footer>
+    </div>
+
+    <script src="/assets/js/scripts.js"></script>
+</body>
+</html>

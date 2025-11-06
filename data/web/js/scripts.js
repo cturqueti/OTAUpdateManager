@@ -1,6 +1,4 @@
-#pragma once
 
-const char *jsScript = R"rawliteral(
 function checkForUpdates() {
     fetch('/check-updates')
         .then(response => response.json())
@@ -242,5 +240,3 @@ function debugUpload() {
     console.log('📄 Arquivo selecionado:', fileName);
     console.log('🔗 URL que será enviada:', '/filesystem-upload?path=' + encodeURIComponent(uploadPath));
 }
-
-)rawliteral";

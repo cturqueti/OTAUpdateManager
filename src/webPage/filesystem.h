@@ -270,6 +270,12 @@ const char *htmlFilesystem = R"rawliteral(
             const fileName = document.getElementById('fileName');
             const uploadBtn = document.getElementById('uploadSubmitBtn');
             const fileDropText = document.getElementById('fileDropText');
+
+            uploadBtn.addEventListener('click', function() {
+                console.log('📤 Botão de upload clicado');
+                console.log('📁 Arquivo selecionado:', fileInput.files[0]?.name);
+                console.log('📍 Caminho de destino:', document.getElementById('uploadPath')?.value);
+            });
             
             if (fileInput.files.length > 0) {
                 const file = fileInput.files[0];
@@ -340,7 +346,8 @@ const char *htmlFilesystem = R"rawliteral(
             else return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         }
 
-        // Upload form handler
+        // Upload form handler - VERSÃO CORRIGIDA
+
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const fileInput = document.getElementById('fileInput');
@@ -358,13 +365,24 @@ const char *htmlFilesystem = R"rawliteral(
 
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
-            formData.append('path', uploadPath);
+            // ✅ REMOVER: formData.append('path', uploadPath); // Não funciona bem com multipart
 
-            fetch('/filesystem-upload', {
+            // ✅ CORREÇÃO: Usar parâmetro de query
+            const url = '/filesystem-upload?path=' + encodeURIComponent(uploadPath);
+            
+            console.log('📤 Enviando upload para:', url);
+            console.log('📁 Arquivo:', fileInput.files[0].name);
+
+            fetch(url, {  // ✅ URL com parâmetro de query
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Erro HTTP: ' + response.status);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.status === 'success') {
                     showNotification(data.message, 'success');
@@ -377,6 +395,7 @@ const char *htmlFilesystem = R"rawliteral(
                 }
             })
             .catch(error => {
+                console.error('❌ Erro no upload:', error);
                 showNotification('Erro no upload: ' + error, 'error');
             });
         });

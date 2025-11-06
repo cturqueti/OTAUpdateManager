@@ -10,10 +10,10 @@
 
 #include "LogLibrary.h"
 
+#include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
 #include <NTPClient.h>
 #include <Update.h>
-#include <WebServer.h>
 #include <WiFiUdp.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -33,7 +33,6 @@ public:
      * @brief Inicia thread FreeRTOS para processamento automático
      * @param stackSize Tamanho da stack da thread (padrão: 8192)
      * @param priority Prioridade da thread (padrão: 1)
-     * @param core Núcleo do processador (padrão: 1)
      */
     static void run(uint32_t stackSize = 8192, UBaseType_t priority = 1);
 
@@ -54,12 +53,6 @@ public:
      * @param password Senha para autenticação
      */
     static void setCredentials(const String &username, const String &password);
-
-    /**
-     * @brief Processa requisições do servidor web
-     * Deve ser chamado no loop() principal se não usar run()
-     */
-    static void handleClient();
 
     /**
      * @brief Retorna se está atualizando
@@ -100,14 +93,11 @@ public:
     static void setPerformUpdateCallback(void (*callback)());
     static String getPullUpdateStatus();
 
-    static void handleFilesystem();
-    static void handleFilesystemUpload();
-    static void handleFilesystemDelete();
-    static void handleFilesystemMkdir();
+    static AsyncWebServer *getServer() { return _server; }
 
 private:
     // ============ VARIÁVEIS DE ESTADO ============
-    static WebServer *_server;
+    static AsyncWebServer *_server;
     static bool _updating;
     static String _username;
     static String _password;
@@ -130,17 +120,41 @@ private:
     static bool _timeSynced;
 
     // ============ MÉTODOS PRIVADOS ============
-    static void handleRoot();
-    static void handleUpdate();
-    static void handleDoUpload();
-    static void handleSystemInfo();
-    static void handleToggleTheme();
-    static bool checkAuthentication();
+    // Handlers principais
+    static void handleRoot(AsyncWebServerRequest *request);
+    static void handleUpdate(AsyncWebServerRequest *request);
+    static void handleSystemInfo(AsyncWebServerRequest *request);
+    static void handleToggleTheme(AsyncWebServerRequest *request);
+    static void handleFilesystem(AsyncWebServerRequest *request);
+
+    // Handlers de upload
+    static void handleDoUpload(AsyncWebServerRequest *request, const String &filename,
+                               size_t index, uint8_t *data, size_t len, bool final);
+    static void handleFilesystemUpload(AsyncWebServerRequest *request, const String &filename,
+                                       size_t index, uint8_t *data, size_t len, bool final);
+
+    // Handlers de API
+    static void handleCheckUpdates(AsyncWebServerRequest *request);
+    static void handlePerformUpdate(AsyncWebServerRequest *request);
+    static void handleFilesystemDelete(AsyncWebServerRequest *request);
+    static void handleFilesystemMkdir(AsyncWebServerRequest *request);
+    static void handleFilesystemDownload(AsyncWebServerRequest *request);
+
+    // Handlers de teste
+    static void handleTestCSS(AsyncWebServerRequest *request);
+    static void handleTestJS(AsyncWebServerRequest *request);
+
+    // Handlers auxiliares
+    static void handleNotFound(AsyncWebServerRequest *request);
+
+    // Autenticação
+    static bool checkAuthentication(AsyncWebServerRequest *request);
 
     // Thread FreeRTOS
     static void taskFunction(void *parameter);
     static void stopTask();
 
+    // Templates e conteúdo
     static String resetReason(esp_reset_reason_t reset);
     static String getSystemInfoContent();
     static String getFullSystemInfoContent();
@@ -148,17 +162,26 @@ private:
     static String formatUptime(unsigned long milliseconds);
     static String formatBuildDate();
 
+    // Version management
     static String extractVersionFromBinary(const uint8_t *data, size_t length);
     static bool isValidVersion(const String &version);
 
+    // Filesystem management
     static String getFilesystemContent(const String &currentPath);
     static String generateBreadcrumb(const String &currentPath);
     static String generateFileList(const String &currentPath);
     static String formatFileSize(size_t bytes);
     static String getFileExtension(const String &filename);
-    static void handleFilesystemDownload();
 
+    // Filesystem utilities
     static bool isLittleFSMounted();
     static String getDirectoryPath(const String &fullPath);
     static bool createDirectories(const String &path);
+    static String getUploadPathFromRequest(AsyncWebServerRequest *request);
+    static bool deleteDirectoryRecursive(const String &path);
+
+    // Static file serving
+    static void serveStaticFile(AsyncWebServerRequest *request, const String &path, const String &defaultContentType = "application/octet-stream");
+    static String getContentType(const String &filename, const String &defaultType);
+    static bool initLittleFS();
 };

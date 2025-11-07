@@ -2,11 +2,21 @@
 
 bool StaticFileHandler::ensureFSMounted()
 {
-    if (!LittleFS.begin(true))
+    if (LittleFS.begin(false))
     {
-        Serial.println("❌ ERRO CRÍTICO: Falha ao montar LittleFS");
+        LOG_INFO("✅ LittleFS já montado");
+        return true;
+    }
+
+    // Tenta montar como leitura/escrita
+    LOG_INFO("🔄 Tentando montar LittleFS como leitura/escrita...");
+    if (!LittleFS.begin(true))
+    { // true = formatIfFailed
+        LOG_ERROR("❌ ERRO CRÍTICO: Falha ao montar LittleFS como leitura/escrita");
         return false;
     }
+
+    LOG_INFO("✅ LittleFS montado com sucesso (leitura/escrita)");
     return true;
 }
 

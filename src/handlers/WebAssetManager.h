@@ -12,4 +12,7 @@ public:
 
 private:
     static void checkAdditionalHTMLFiles();
+    static void forceRemountLittleFS();
+    static void handleFilesystemUpload(AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final);
+    static bool deleteRecursive(String path);
 };

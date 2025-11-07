@@ -94,6 +94,7 @@ public:
     static String getPullUpdateStatus();
 
     static AsyncWebServer *getServer() { return _server; }
+    static String getMDNSHostname() { return _mdnsHostname; }
 
 private:
     // ============ VARIÁVEIS DE ESTADO ============

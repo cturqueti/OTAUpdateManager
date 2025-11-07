@@ -1,242 +1,191 @@
+// scripts.js - Common JavaScript functions for ESP32 OTA
 
-function checkForUpdates() {
-    fetch('/check-updates')
-        .then(response => response.json())
-        .then(data => {
-            alert(data.message);
-            // Recarrega a página para atualizar o status
-            setTimeout(() => location.reload(), 2000);
-        })
-        .catch(error => {
-            alert('Erro ao verificar atualizações: ' + error);
-        });
-}
-
-function performPullUpdate() {
-    if (confirm('Deseja instalar a atualização agora? O ESP32 reiniciará automaticamente.')) {
-        fetch('/perform-update')
-            .then(response => response.json())
-            .then(data => {
-                alert(data.message);
-                // Mostra mensagem de reinício
-                setTimeout(() => {
-                    alert('Reiniciando... A página será atualizada em instantes.');
-                }, 3000);
-            })
-            .catch(error => {
-                alert('Erro ao iniciar atualização: ' + error);
-            });
-    }
-}
-    
+// Theme management
 function toggleTheme() {
-    const currentPath = window.location.pathname;
-    const currentTheme = new URLSearchParams(window.location.search).get('theme') || 'dark'; // ✅ PADRÃO DARK
-    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-    window.location.href = currentPath + '?theme=' + newTheme;
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    const savedTheme = localStorage.getItem('ota-theme');
-    const currentTheme = new URLSearchParams(window.location.search).get('theme');
+    const body = document.body;
+    const themeToggles = document.querySelectorAll('.theme-toggle');
     
-    if (currentTheme) {
-        localStorage.setItem('ota-theme', currentTheme);
-    } else if (savedTheme && !currentTheme) {
-        window.location.href = window.location.pathname + '?theme=' + savedTheme;
-    } else if (!savedTheme && !currentTheme) {
-        // ✅ NOVO: Se não há tema salvo nem parâmetro, redireciona para dark
-        window.location.href = window.location.pathname + '?theme=dark';
-    }
-});
-
-// No arquivo filesystem.h, adicione estas funções JavaScript:
-
-// File upload functionality
-function updateFileName() {
-    const fileInput = document.getElementById('fileInput');
-    const fileName = document.getElementById('fileName');
-    const uploadBtn = document.getElementById('uploadSubmitBtn');
-    const fileDropText = document.getElementById('fileDropText');
-    
-    if (fileInput.files.length > 0) {
-        const file = fileInput.files[0];
-        fileName.textContent = `Arquivo selecionado: ${file.name} (${formatFileSize(file.size)})`;
-        fileDropText.textContent = file.name;
-        uploadBtn.disabled = false;
+    if (body.classList.contains('dark')) {
+        body.classList.remove('dark');
+        body.classList.add('light');
+        themeToggles.forEach(toggle => toggle.textContent = '🌙');
+        localStorage.setItem('theme', 'light');
     } else {
-        fileName.textContent = '';
-        fileDropText.textContent = 'Clique para selecionar ou arraste arquivos aqui';
-        uploadBtn.disabled = true;
+        body.classList.remove('light');
+        body.classList.add('dark');
+        themeToggles.forEach(toggle => toggle.textContent = '☀️');
+        localStorage.setItem('theme', 'dark');
     }
 }
 
+// Apply saved theme on load
+function applySavedTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    const body = document.body;
+    const themeToggles = document.querySelectorAll('.theme-toggle');
+    
+    body.classList.remove('dark', 'light');
+    body.classList.add(savedTheme);
+    
+    themeToggles.forEach(toggle => {
+        toggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+    });
+}
+
+// System information functions
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatRSSI(rssi) {
+    if (!rssi) return 'N/A';
+    if (rssi >= -50) return `${rssi} dBm (Excelente)`;
+    if (rssi >= -60) return `${rssi} dBm (Bom)`;
+    if (rssi >= -70) return `${rssi} dBm (Regular)`;
+    return `${rssi} dBm (Fraco)`;
+}
+
+function getMonthNumber(monthStr) {
+    const months = {
+        'Jan': 0, 'Fev': 1, 'Mar': 2, 'Abr': 3, 'Mai': 4, 'Jun': 5,
+        'Jul': 6, 'Ago': 7, 'Set': 8, 'Out': 9, 'Nov': 10, 'Dez': 11
+    };
+    return months[monthStr] || 0;
+}
+
+function getMonthName(month) {
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 
+                  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    return months[month];
+}
+
+// Modal functions
+function showModal(modalId) {
+    document.getElementById(modalId).style.display = 'block';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// Status message functions
+function showStatus(message, type) {
+    const statusEl = document.getElementById('statusMessage');
+    if (!statusEl) return;
+    
+    statusEl.textContent = message;
+    statusEl.className = `status-message ${type}`;
+    statusEl.style.display = 'block';
+    
+    setTimeout(() => {
+        statusEl.style.display = 'none';
+    }, 3000);
+}
+
+// File system functions
 function formatFileSize(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    else return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// Drag and drop functionality
-function initializeDragAndDrop() {
-    const dropArea = document.querySelector('.file-drop-area');
-    
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, preventDefaults, false);
-    });
-    
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-    
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropArea.addEventListener(eventName, highlight, false);
-    });
-    
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, unhighlight, false);
-    });
-    
-    function highlight() {
-        dropArea.classList.add('dragover');
-    }
-    
-    function unhighlight() {
-        dropArea.classList.remove('dragover');
-    }
-    
-    dropArea.addEventListener('drop', handleDrop, false);
-    
-    function handleDrop(e) {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        const fileInput = document.getElementById('fileInput');
-        
-        if (files.length > 0) {
-            fileInput.files = files;
-            updateFileName();
-        }
-    }
-}
-
-// Initialize when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    initializeDragAndDrop();
-    
-    // Reset file input when modal opens
-    document.getElementById('uploadModal').addEventListener('show', function() {
-        document.getElementById('fileInput').value = '';
-        updateFileName();
-    });
-});
-
-function downloadFile(filePath) {
-    if (!filePath) {
-        showNotification('Caminho do arquivo inválido', 'error');
+// OTA Update functions
+// scripts.js - Atualizar a função checkForUpdates
+async function checkForUpdates() {
+    const otaStatus = document.getElementById('otaStatus');
+    if (!otaStatus) {
+        console.error('Elemento otaStatus não encontrado');
         return;
     }
-
-    showNotification('Iniciando download...', 'success');
     
-    // ✅ Método mais confiável: criar link temporário
-    const downloadLink = document.createElement('a');
-    downloadLink.href = '/filesystem-download?path=' + encodeURIComponent(filePath);
-    downloadLink.download = filePath.split('/').pop(); // Nome do arquivo
-    downloadLink.style.display = 'none';
+    otaStatus.innerHTML = `
+        <div style="text-align: center; color: var(--text-secondary); font-size: 0.9rem; margin: 0.5rem 0;">
+            🔍 Verificando atualizações no servidor...
+        </div>
+    `;
     
-    // ✅ Adicionar ao DOM e clicar
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-    
-    // ✅ Limpar após o click
-    setTimeout(() => {
-        document.body.removeChild(downloadLink);
-        showNotification('Download do arquivo iniciado', 'success');
-    }, 1000);
-    
-    console.log('Download iniciado:', filePath);
-}
-
-function downloadFileAlternative(filePath) {
-    if (!filePath) return;
-    
-    showNotification('Abrindo download...', 'success');
-    
-    // ✅ Abrir em nova janela (fallback)
-    const newWindow = window.open('/filesystem-download?path=' + encodeURIComponent(filePath), '_blank');
-    
-    // ✅ Fechar a janela após um tempo se ainda estiver aberta
-    setTimeout(() => {
-        if (newWindow && !newWindow.closed) {
-            newWindow.close();
-        }
-    }, 5000);
-}
-
-// ✅ MELHORIA: Função para visualizar arquivos de texto (opcional)
-function viewTextFile(filePath) {
-    if (!filePath) return;
-    
-    // Para arquivos de texto pequenos, podemos abrir em uma nova janela
-    if (filePath.endsWith('.txt') || filePath.endsWith('.log') || 
-        filePath.endsWith('.json') || filePath.endsWith('.html') || 
-        filePath.endsWith('.css') || filePath.endsWith('.js')) {
+    try {
+        const response = await fetch('/check-updates');
         
-        window.open('/filesystem-download?path=' + encodeURIComponent(filePath), '_blank');
-    } else {
-        // Para outros tipos de arquivo, apenas faz download
-        downloadFile(filePath);
+        // Verifica se a resposta é OK
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+        
+        // Verifica se o content-type é JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Resposta não é JSON');
+        }
+        
+        const data = await response.json();
+        console.log('Resposta do servidor:', data);
+        
+        // Processa a resposta baseada no status
+        if (data.status === 'update_available') {
+            otaStatus.innerHTML = `
+                <div style="background: var(--warning); color: white; padding: 0.5rem; border-radius: 0.375rem; margin: 0.25rem 0; text-align: center;">
+                    <p style="margin: 0; font-weight: bold; font-size: 0.85rem;">🔄 ${data.message}</p>
+                    <p style="margin: 0.25rem 0; font-size: 0.8rem;">Versão disponível: ${data.latest_version}</p>
+                </div>
+                <div style="text-align: center; margin: 0.5rem 0;">
+                    <button class="btn" style="background: var(--accent-primary); padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="performPullUpdate()">
+                        📥 Instalar Atualização
+                    </button>
+                    <button class="btn" style="background: var(--secondary); padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="checkForUpdates()">
+                        🔍 Verificar Novamente
+                    </button>
+                </div>
+            `;
+        } else if (data.status === 'up_to_date') {
+            otaStatus.innerHTML = `
+                <div style="background: var(--success); color: white; padding: 0.5rem; border-radius: 0.375rem; margin: 0.25rem 0; text-align: center;">
+                    <p style="margin: 0; font-weight: bold; font-size: 0.85rem;">✅ ${data.message}</p>
+                    <p style="margin: 0.25rem 0; font-size: 0.8rem;">Versão atual: ${data.current_version}</p>
+                </div>
+                <div style="text-align: center; margin: 0.5rem 0;">
+                    <button class="btn" style="background: var(--accent-primary); padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="checkForUpdates()">
+                        🔍 Verificar Novamente
+                    </button>
+                </div>
+            `;
+        } else {
+            throw new Error(data.message || 'Status desconhecido na resposta');
+        }
+        
+    } catch (error) {
+        console.error('Erro ao verificar atualizações:', error);
+        otaStatus.innerHTML = `
+            <div style="background: var(--error); color: white; padding: 0.5rem; border-radius: 0.375rem; margin: 0.25rem 0; text-align: center;">
+                <p style="margin: 0; font-weight: bold; font-size: 0.85rem;">❌ Erro ao verificar atualizações</p>
+                <p style="margin: 0.25rem 0; font-size: 0.8rem;">${error.message}</p>
+            </div>
+            <div style="text-align: center; margin: 0.5rem 0;">
+                <button class="btn" style="background: var(--accent-primary); padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="checkForUpdates()">
+                    🔍 Tentar Novamente
+                </button>
+            </div>
+        `;
     }
 }
 
-function validateUploadPath(input) {
-    let path = input.value.trim();
+// Initialize common functionality
+document.addEventListener('DOMContentLoaded', function() {
+    applySavedTheme();
     
-    // Garante que comece com /
-    if (!path.startsWith('/')) {
-        path = '/' + path;
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        const modals = document.getElementsByClassName('modal');
+        for (let modal of modals) {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
     }
-    
-    // Remove barras duplicadas no final
-    if (path.endsWith('/') && path !== '/') {
-        path = path.slice(0, -1);
-    }
-    
-    input.value = path;
-}
-
-function validateAndPrepareUpload() {
-    const uploadPathInput = document.getElementById('uploadPath');
-    let path = uploadPathInput.value.trim();
-    
-    // Se o path estiver vazio ou for apenas "/", usa o diretório atual
-    if (!path || path === '/') {
-        path = currentDirectoryPath;
-    }
-    
-    // Garante que comece com /
-    if (!path.startsWith('/')) {
-        path = '/' + path;
-    }
-    
-    // Remove barras duplicadas no final (exceto para raiz)
-    if (path.endsWith('/') && path !== '/') {
-        path = path.slice(0, -1);
-    }
-    
-    uploadPathInput.value = path;
-    return path;
-}
-
-function debugUpload() {
-    const uploadPath = document.getElementById('uploadPath').value;
-    const fileInput = document.getElementById('fileInput');
-    const fileName = fileInput.files.length > 0 ? fileInput.files[0].name : 'Nenhum arquivo';
-    
-    console.log('🔍 DEBUG UPLOAD:');
-    console.log('📁 Path no input:', uploadPath);
-    console.log('📁 Diretório atual:', currentDirectoryPath);
-    console.log('📄 Arquivo selecionado:', fileName);
-    console.log('🔗 URL que será enviada:', '/filesystem-upload?path=' + encodeURIComponent(uploadPath));
-}
+});

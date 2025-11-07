@@ -78,20 +78,9 @@ void OTAPushUpdateManager::begin(uint16_t port)
                 { request->send(200, "text/plain", "Upload processed"); }, [](AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final)
                 { handleDoUpload(request, filename, index, data, len, final); });
 
-    // Upload de arquivos
-    _server->on("/filesystem-upload", HTTP_POST, [](AsyncWebServerRequest *request)
-                {
-                    // Resposta será enviada no handler de upload
-                },
-                [](AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final)
-                { handleFilesystemUpload(request, filename, index, data, len, final); });
-
     // API endpoints
     _server->on("/check-updates", HTTP_GET, handleCheckUpdates);
     _server->on("/perform-update", HTTP_GET, handlePerformUpdate);
-    _server->on("/filesystem-delete", HTTP_POST, handleFilesystemDelete);
-    _server->on("/filesystem-mkdir", HTTP_POST, handleFilesystemMkdir);
-    _server->on("/filesystem-download", HTTP_GET, handleFilesystemDownload);
 
     // Rotas de teste
     _server->on("/test-css", HTTP_GET, handleTestCSS);

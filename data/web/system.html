@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 OTA System</title>
+    <link rel="icon" type="image/png" href="/assets/icons/favicon.png">
+    <link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+<body class="dark">
+    <div class="container">
+        <nav class="navbar">
+            <a href="/" class="nav-brand">OTA Update</a>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/update.html">Upload</a>
+                <a href="/system.html">System</a>
+                <button class="theme-toggle nav-toggle" onclick="toggleTheme()">
+                    ☀️
+                </button>
+            </div>
+        </nav>
+        
+        <main class="main-content">
+            <div class="header">
+                <div class="header-left">
+                    <h1>System Information</h1>
+                    <div class="time-info">
+                        <div class="system-time" id="current-time">Carregando...</div>
+                        <div class="uptime" id="uptime">Uptime: Carregando...</div>
+                    </div>
+                </div>
+                <button class="theme-toggle" onclick="toggleTheme()">
+                    ☀️
+                </button>
+            </div>
+            
+            <div id="content">
+                <div class="info-grid">
+                    <!-- Card WiFi -->
+                    <div class="info-card">
+                        <h3>WiFi</h3>
+                        <p><strong>IP:</strong> <span id="wifi-ip">Carregando...</span></p>
+                        <p><strong>SSID:</strong> <span id="wifi-ssid">Carregando...</span></p>
+                        <p><strong>Sinal:</strong> <span id="wifi-rssi">Carregando...</span></p>
+                        <p><strong>MAC:</strong> <span id="wifi-mac">Carregando...</span></p>
+                        <p><strong>Hostname:</strong> <span id="wifi-hostname">Carregando...</span></p>
+                        <p><strong>Gateway:</strong> <span id="wifi-gateway">Carregando...</span></p>
+                        <p><strong>Subnet:</strong> <span id="wifi-subnet">Carregando...</span></p>
+                        <p><strong>DNS:</strong> <span id="wifi-dns">Carregando...</span></p>
+                        <p><strong>mDNS:</strong> <span id="wifi-mdns">Carregando...</span></p>
+                    </div>
+                    
+                    <!-- Card Hardware -->
+                    <div class="info-card">
+                        <h3>Hardware</h3>
+                        <p><strong>Modelo:</strong> <span id="hw-chipmodel">Carregando...</span></p>
+                        <p><strong>Núcleos:</strong> <span id="hw-cores">Carregando...</span></p>
+                        <p><strong>Revisão:</strong> <span id="hw-revision">Carregando...</span></p>
+                        <p><strong>CPU:</strong> <span id="hw-cpufreq">Carregando...</span></p>
+                        <p><strong>Heap Livre:</strong> <span id="hw-heapfree">Carregando...</span></p>
+                        <p><strong>Heap Total:</strong> <span id="hw-heaptotal">Carregando...</span></p>
+                        <p><strong>Heap Mínimo:</strong> <span id="hw-heapmin">Carregando...</span></p>
+                        <p><strong>PSRAM:</strong> <span id="hw-psram">Carregando...</span></p>
+                        <p><strong>Flash:</strong> <span id="hw-flashsize">Carregando...</span></p>
+                        <p><strong>Velocidade Flash:</strong> <span id="hw-flashspeed">Carregando...</span></p>
+                        <p><strong>SDK:</strong> <span id="hw-sdkversion">Carregando...</span></p>
+                    </div>
+                    
+                    <!-- Card Sistema -->
+                    <div class="info-card">
+                        <h3>Sistema</h3>
+                        <p><strong>Versão:</strong> <span id="sys-version">Carregando...</span></p>
+                        <p><strong>Tempo Ativo:</strong> <span id="sys-uptime">Carregando...</span></p>
+                        <p><strong>Data/Hora:</strong> <span id="sys-currenttime">Carregando...</span></p>
+                        <p><strong>Motivo Reset:</strong> <span id="sys-resetreason">Carregando...</span></p>
+                        <p><strong>Info Reset:</strong> <span id="sys-resetinfo">Carregando...</span></p>
+                    </div>
+                    
+                    <!-- Card Sistema de Arquivos -->
+                    <div class="info-card">
+                        <h3>Sistema de Arquivos</h3>
+                        <p><strong>Total:</strong> <span id="fs-total">Carregando...</span></p>
+                        <p><strong>Usado:</strong> <span id="fs-used">Carregando...</span></p>
+                        <p><strong>Livre:</strong> <span id="fs-free">Carregando...</span></p>
+                        <p><strong>Uso:</strong> <span id="fs-usage">Carregando...</span></p>
+                        <div class="progress">
+                            <div class="progress-bar" id="fs-progress-bar"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="info-card">
+                        <h3>OTA Remoto</h3>
+                        <div class="ota-status" id="otaStatus">
+                            <!-- Status será preenchido via JavaScript -->
+                            <div style="text-align: center; color: var(--text-secondary); font-size: 0.9rem; margin: 0.5rem 0;">
+                                ⏳ Aguardando verificação...
+                            </div>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-success" onclick="performPullUpdate()">
+                                🔄 Instalar Atualização
+                            </button>
+                            <button class="btn" onclick="checkForUpdates()">
+                                🔍 Verificar Atualizações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Grid de ações -->
+                <div class="action-grid">
+                    <a href="/update.html" class="action-card">
+                        <div class="action-icon">📤</div>
+                        <h3>Firmware Upload</h3>
+                        <p>Enviar novo firmware .bin</p>
+                    </a>
+                    <a href="/system.html" class="action-card">
+                        <div class="action-icon">ℹ️</div>
+                        <h3>System Info</h3>
+                        <p>Detalhes completos do ESP32</p>
+                    </a>
+                    <a href="/filesystem.html" class="action-card">
+                        <div class="action-icon">📁</div>
+                        <h3>File Manager</h3>
+                        <p>Gerenciar arquivos LittleFS</p>
+                    </a>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="footer">
+            <p>ESP32 OTA Update - <span id="footer-hostinfo">Carregando...</span></p>
+        </footer>
+    </div>
+    <script src="/assets/js/scripts.js"></script>
+    <script src="/assets/js/system.js"></script>
+</body>
+</html>

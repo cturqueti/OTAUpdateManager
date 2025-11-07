@@ -158,7 +158,7 @@ private:
     static String resetReason(esp_reset_reason_t reset);
     static String getSystemInfoContent();
     static String getFullSystemInfoContent();
-    static String processTemplate(const String &templateHTML, const String &title, const String &content, bool darkMode);
+    static String processTemplate(const String &templateHTML, const String &title, const String &content, AsyncWebServerRequest *request);
     static String formatUptime(unsigned long milliseconds);
     static String formatBuildDate();
 

@@ -9,4 +9,7 @@ public:
     static void setupRoutes(AsyncWebServer *server);
     static void setupRoutes_bkp(AsyncWebServer *server);
     static void checkRequiredAssets();
+
+private:
+    static void checkAdditionalHTMLFiles();
 };

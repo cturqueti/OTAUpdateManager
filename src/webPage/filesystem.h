@@ -1,6 +1,6 @@
 #pragma once
 
-const char *htmlFilesystem = R"rawliteral(
+const String htmlFilesystem = R"rawliteral(
 <!DOCTYPE html>
 <html lang="pt-BR" data-theme="{{THEME}}">
 <head>

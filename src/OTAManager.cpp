@@ -111,11 +111,6 @@ void OTAManager::setPullInterval(uint16_t minutes)
     }
 }
 
-void OTAManager::handleClient()
-{
-    OTAPushUpdateManager::handleClient();
-}
-
 void OTAManager::checkForUpdates()
 {
     if (_serverUrl.isEmpty() || _currentMode == MANUAL)

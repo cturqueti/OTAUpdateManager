@@ -1,5 +1,6 @@
 #pragma once
 
+#include "LogLibrary.h"
 #include "OTAPullUpdateManager.h"
 #include "OTAPushUpdateManager.h"
 
@@ -28,7 +29,6 @@ public:
     static void setMDNS(const String &hostname);
     static void setPullInterval(uint16_t minutes);
 
-    static void handleClient();
     static void checkForUpdates();
     static bool isUpdateAvailable();
     static void performUpdate();

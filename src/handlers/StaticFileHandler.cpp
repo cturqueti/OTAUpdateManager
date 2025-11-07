@@ -1,7 +1,22 @@
 #include "StaticFileHandler.h"
 
+bool StaticFileHandler::ensureFSMounted()
+{
+    if (!LittleFS.begin(true))
+    {
+        Serial.println("❌ ERRO CRÍTICO: Falha ao montar LittleFS");
+        return false;
+    }
+    return true;
+}
+
 void StaticFileHandler::serveFile(AsyncWebServerRequest *request, const String &filePath, const String &defaultContentType)
 {
+    if (!ensureFSMounted())
+    {
+        request->send(500, "text/plain", "File system error");
+        return;
+    }
     LOG_INFO("📁 Servindo arquivo: %s", filePath.c_str());
 
     if (!LittleFS.exists(filePath))

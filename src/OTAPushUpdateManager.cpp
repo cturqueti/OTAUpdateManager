@@ -4,10 +4,12 @@
 #include "handlers/WebAssetManager.h"
 #include "webPage/css.h"
 #include "webPage/favicon.h"
-#include "webPage/filesystem.h"
+// #include "webPage/filesystem.h"
 #include "webPage/scripts.h"
 #include "webPage/system.h"
 #include "webPage/update.h"
+#include <algorithm>
+#include <vector>
 
 // ============ INICIALIZAÇÃO DE VARIÁVEIS ESTÁTICAS ============
 
@@ -70,14 +72,7 @@ void OTAPushUpdateManager::begin(uint16_t port)
     }
 
     // ============ CONFIGURAÇÃO DAS ROTAS ============
-
-    // Rotas principais
-    _server->on("/", HTTP_GET, handleRoot);
-    _server->on("/update", HTTP_GET, handleUpdate);
-    _server->on("/system", HTTP_GET, handleSystemInfo);
     _server->on("/toggle-theme", HTTP_GET, handleToggleTheme);
-    _server->on("/filesystem", HTTP_GET, handleFilesystem);
-
     // Upload de firmware
     _server->on("/doUpdate", HTTP_POST, [](AsyncWebServerRequest *request)
                 { request->send(200, "text/plain", "Upload processed"); }, [](AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final)
@@ -167,10 +162,7 @@ void OTAPushUpdateManager::handleUpdate(AsyncWebServerRequest *request)
     if (!checkAuthentication(request))
         return;
 
-    String theme = request->hasArg("theme") ? request->arg("theme") : "dark";
-    bool darkMode = (theme == "dark");
-
-    String html = processTemplate(htmlUpdate, "Firmware Upload", "", darkMode);
+    String html = processTemplate(htmlUpdate, "Firmware Upload", "", request);
     request->send(200, "text/html", html);
 }
 
@@ -179,12 +171,8 @@ void OTAPushUpdateManager::handleSystemInfo(AsyncWebServerRequest *request)
     if (!checkAuthentication(request))
         return;
 
-    String theme = request->hasArg("theme") ? request->arg("theme") : "dark";
-    bool darkMode = (theme == "dark");
-
     String content = getFullSystemInfoContent();
-    String html = processTemplate(htmlSystem, "System Information", content, darkMode);
-
+    String html = processTemplate(htmlSystem, "System Information", content, request);
     request->send(200, "text/html", html);
 }
 
@@ -512,20 +500,16 @@ String OTAPushUpdateManager::getSystemInfoContent()
 }
 
 // ============ PROCESSAMENTO DE TEMPLATES ============
-String OTAPushUpdateManager::processTemplate(const String &templateHTML, const String &title, const String &content, bool darkMode)
+String OTAPushUpdateManager::processTemplate(const String &templateHTML, const String &title, const String &content, AsyncWebServerRequest *request)
 {
     String html = templateHTML;
 
-    // DEBUG: Log para verificar substituição
-    LOG_DEBUG("Processando template - Título: %s", title.c_str());
-
-    // ✅ ALTERADO: Padrão agora é dark (true) em vez de light (false)
-    bool isDarkMode = darkMode;
-
-    // Se não foi especificado um tema, usa dark como padrão
-    if (!_server->hasArg("theme"))
+    // ✅ CORREÇÃO: Verifica o tema no request
+    bool isDarkMode = true; // padrão dark
+    if (request && request->hasArg("theme"))
     {
-        isDarkMode = true; // ✅ PADRÃO DARK
+        String theme = request->arg("theme");
+        isDarkMode = (theme == "dark");
     }
 
     // Substitui placeholders PRINCIPAIS
@@ -561,3 +545,333 @@ String OTAPushUpdateManager::processTemplate(const String &templateHTML, const S
 
     return html;
 }
+
+// ============ IMPLEMENTAÇÕES FALTANTES ============
+
+// Gerenciamento de arquivos
+void OTAPushUpdateManager::handleFilesystem(AsyncWebServerRequest *request)
+{
+    if (!checkAuthentication(request))
+        return;
+
+    // String currentPath = request->hasArg("path") ? request->arg("path") : "/";
+    // String content = getFilesystemContent(currentPath);
+    // String html = processTemplate(htmlFilesystem, "File Manager", content, request);
+
+    // // Adiciona substituições específicas do filesystem
+    // html.replace("{{CURRENT_PATH}}", currentPath);
+    // html.replace("{{BREADCRUMB}}", generateBreadcrumb(currentPath));
+
+    // request->send(200, "text/html", html);
+}
+
+void OTAPushUpdateManager::handleFilesystemUpload(AsyncWebServerRequest *request, const String &filename,
+                                                  size_t index, uint8_t *data, size_t len, bool final)
+{
+    if (!checkAuthentication(request))
+        return;
+
+    static File uploadFile;
+    static String uploadPath;
+
+    if (index == 0)
+    {
+        LOG_INFO("📤 Iniciando upload de arquivo: %s", filename.c_str());
+        uploadPath = getUploadPathFromRequest(request);
+
+        // Cria diretórios se necessário
+        createDirectories(getDirectoryPath(uploadPath + "/" + filename));
+
+        String fullPath = uploadPath + "/" + filename;
+        uploadFile = LittleFS.open(fullPath, "w");
+        if (!uploadFile)
+        {
+            LOG_ERROR("❌ Falha ao criar arquivo: %s", fullPath.c_str());
+            request->send(500, "text/plain", "Failed to create file");
+            return;
+        }
+    }
+
+    if (uploadFile)
+    {
+        if (uploadFile.write(data, len) != len)
+        {
+            LOG_ERROR("❌ Erro na escrita do arquivo");
+        }
+    }
+
+    if (final)
+    {
+        if (uploadFile)
+        {
+            uploadFile.close();
+            LOG_INFO("✅ Upload finalizado: %s (%u bytes)", filename.c_str(), index + len);
+            request->send(200, "text/plain", "Upload successful");
+        }
+        else
+        {
+            request->send(500, "text/plain", "Upload failed");
+        }
+    }
+}
+
+void OTAPushUpdateManager::handleFilesystemDelete(AsyncWebServerRequest *request)
+{
+    if (!checkAuthentication(request))
+        return;
+
+    if (!request->hasArg("path"))
+    {
+        request->send(400, "text/plain", "Missing path parameter");
+        return;
+    }
+
+    String path = request->arg("path");
+
+    if (LittleFS.exists(path))
+    {
+        if (LittleFS.remove(path))
+        {
+            LOG_INFO("✅ Arquivo deletado: %s", path.c_str());
+            request->send(200, "text/plain", "File deleted");
+        }
+        else
+        {
+            // Tenta deletar como diretório
+            if (deleteDirectoryRecursive(path))
+            {
+                LOG_INFO("✅ Diretório deletado: %s", path.c_str());
+                request->send(200, "text/plain", "Directory deleted");
+            }
+            else
+            {
+                LOG_ERROR("❌ Falha ao deletar: %s", path.c_str());
+                request->send(500, "text/plain", "Delete failed");
+            }
+        }
+    }
+    else
+    {
+        request->send(404, "text/plain", "File not found");
+    }
+}
+
+void OTAPushUpdateManager::handleFilesystemMkdir(AsyncWebServerRequest *request)
+{
+    if (!checkAuthentication(request))
+        return;
+
+    if (!request->hasArg("path"))
+    {
+        request->send(400, "text/plain", "Missing path parameter");
+        return;
+    }
+
+    String path = request->arg("path");
+
+    if (createDirectories(path))
+    {
+        LOG_INFO("✅ Diretório criado: %s", path.c_str());
+        request->send(200, "text/plain", "Directory created");
+    }
+    else
+    {
+        LOG_ERROR("❌ Falha ao criar diretório: %s", path.c_str());
+        request->send(500, "text/plain", "Failed to create directory");
+    }
+}
+
+void OTAPushUpdateManager::handleFilesystemDownload(AsyncWebServerRequest *request)
+{
+    if (!checkAuthentication(request))
+        return;
+
+    if (!request->hasArg("path"))
+    {
+        request->send(400, "text/plain", "Missing path parameter");
+        return;
+    }
+
+    String path = request->arg("path");
+    serveStaticFile(request, path);
+}
+
+// FreeRTOS
+void OTAPushUpdateManager::run(uint32_t stackSize, UBaseType_t priority)
+{
+    if (_taskRunning)
+        return;
+
+    _taskStackSize = stackSize;
+    _taskPriority = priority;
+
+    xTaskCreate(
+        taskFunction,
+        "OTAWebServer",
+        stackSize,
+        nullptr,
+        priority,
+        &_webPageTaskHandle);
+
+    _taskRunning = true;
+    LOG_INFO("✅ Task FreeRTOS iniciada");
+}
+
+void OTAPushUpdateManager::stop()
+{
+    stopTask();
+}
+
+void OTAPushUpdateManager::taskFunction(void *parameter)
+{
+    while (_taskRunning)
+    {
+        updateTime();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+    vTaskDelete(nullptr);
+}
+
+void OTAPushUpdateManager::stopTask()
+{
+    if (_taskRunning && _webPageTaskHandle)
+    {
+        _taskRunning = false;
+        vTaskDelete(_webPageTaskHandle);
+        _webPageTaskHandle = nullptr;
+        LOG_INFO("✅ Task FreeRTOS parada");
+    }
+}
+
+// Configurações
+void OTAPushUpdateManager::setMDNS(const String &hostname)
+{
+    _mdnsHostname = hostname;
+    if (MDNS.begin(hostname.c_str()))
+    {
+        LOG_INFO("✅ mDNS iniciado: %s.local", hostname.c_str());
+    }
+    else
+    {
+        LOG_ERROR("❌ Falha ao iniciar mDNS");
+    }
+}
+
+void OTAPushUpdateManager::setCredentials(const String &username, const String &password)
+{
+    _username = username;
+    _password = password;
+    LOG_INFO("✅ Credenciais OTA definidas");
+}
+
+void OTAPushUpdateManager::setPullUpdateCallback(bool (*callback)())
+{
+    _pullUpdateAvailableCallback = callback;
+}
+
+void OTAPushUpdateManager::setPerformUpdateCallback(void (*callback)())
+{
+    _performUpdateCallback = callback;
+}
+
+// Status e utilitários
+bool OTAPushUpdateManager::isUpdating()
+{
+    return _updating;
+}
+
+bool OTAPushUpdateManager::isRunning()
+{
+    return _running;
+}
+
+String OTAPushUpdateManager::getAccessURL()
+{
+    if (_mdnsHostname != "")
+    {
+        return "http://" + _mdnsHostname + ".local";
+    }
+    return "http://" + WiFi.localIP().toString();
+}
+
+String OTAPushUpdateManager::getPullUpdateStatus()
+{
+    if (_pullUpdateAvailableCallback)
+    {
+        return _pullUpdateAvailableCallback() ? "available" : "updated";
+    }
+    return "disabled";
+}
+
+// NTP Client
+void OTAPushUpdateManager::updateTime()
+{
+    if (_timeClient)
+    {
+        _timeClient->update();
+    }
+}
+
+unsigned long OTAPushUpdateManager::getCurrentTimestamp()
+{
+    if (_timeClient)
+    {
+        return _timeClient->getEpochTime();
+    }
+    return 0;
+}
+
+String OTAPushUpdateManager::formatTime(unsigned long rawTime)
+{
+    time_t time = rawTime;
+    struct tm *timeinfo = localtime(&time);
+
+    char buffer[20];
+    strftime(buffer, sizeof(buffer), "%H:%M:%S", timeinfo);
+    return String(buffer);
+}
+
+// Filesystem
+bool OTAPushUpdateManager::initLittleFS()
+{
+    if (!LittleFS.begin(true))
+    {
+        LOG_ERROR("❌ Falha ao montar LittleFS");
+        return false;
+    }
+    LOG_INFO("✅ LittleFS montado com sucesso");
+    return true;
+}
+
+bool OTAPushUpdateManager::isLittleFSMounted()
+{
+    return LittleFS.begin(true); // Tenta montar se não estiver
+}
+
+String OTAPushUpdateManager::getFullSystemInfoContent()
+{
+    // Implementação básica - expanda conforme necessário
+    String content = "<div class='system-info'>";
+    content += "<h3>System Information</h3>";
+    content += "<p><strong>Uptime:</strong> " + formatUptime(millis()) + "</p>";
+    content += "<p><strong>Free Heap:</strong> " + String(ESP.getFreeHeap()) + " bytes</p>";
+    content += "<p><strong>CPU Frequency:</strong> " + String(ESP.getCpuFreqMHz()) + " MHz</p>";
+    content += "</div>";
+    return content;
+}
+
+// Adicione estas implementações stub para as funções restantes:
+
+String OTAPushUpdateManager::getFilesystemContent(const String &currentPath) { return ""; }
+String OTAPushUpdateManager::generateBreadcrumb(const String &currentPath) { return ""; }
+String OTAPushUpdateManager::generateFileList(const String &currentPath) { return ""; }
+String OTAPushUpdateManager::formatFileSize(size_t bytes) { return ""; }
+String OTAPushUpdateManager::getFileExtension(const String &filename) { return ""; }
+String OTAPushUpdateManager::getDirectoryPath(const String &fullPath) { return ""; }
+bool OTAPushUpdateManager::createDirectories(const String &path) { return false; }
+String OTAPushUpdateManager::getUploadPathFromRequest(AsyncWebServerRequest *request) { return ""; }
+bool OTAPushUpdateManager::deleteDirectoryRecursive(const String &path) { return false; }
+String OTAPushUpdateManager::resetReason(esp_reset_reason_t reset) { return ""; }
+String OTAPushUpdateManager::formatBuildDate() { return ""; }
+String OTAPushUpdateManager::extractVersionFromBinary(const uint8_t *data, size_t length) { return ""; }
+bool OTAPushUpdateManager::isValidVersion(const String &version) { return false; }

@@ -11,4 +11,7 @@ public:
     static String getContentType(const String &filename, const String &defaultType);
     static bool fileExists(const String &path);
     static size_t getFileSize(const String &path);
+
+private:
+    static bool ensureFSMounted();
 };

@@ -42,6 +42,22 @@
     background: var(--hover-color);
 }
 
+.file-extension {
+    color: var(--text-tertiary);
+    font-size: 0.8em;
+    margin-left: 4px;
+    opacity: 0.7;
+}
+
+.file-info-badge {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    margin-left: 0.5rem;
+}
+
 .file-item.folder .file-name {
     cursor: pointer;
     color: var(--accent-primary);
@@ -50,6 +66,15 @@
 
 .file-item.file .file-name {
     cursor: pointer;
+}
+
+.file-item.recent {
+    border-left: 3px solid var(--success);
+}
+
+.file-item.highlight {
+    background: rgba(25, 118, 210, 0.1);
+    border-left: 3px solid var(--accent-primary);
 }
 
 .file-name {
@@ -89,6 +114,45 @@
     color: var(--error);
     padding: 2rem;
 }
+
+.loading {
+    opacity: 0.7;
+    font-style: italic;
+}
+
+.error {
+    color: #d32f2f;
+    font-weight: bold;
+}
+
+.directory-info {
+    background: var(--bg-secondary);
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    border-left: 4px solid var(--accent-primary);
+}
+
+.directory-stats {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.stat-label {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
 
 /* Responsive */
 @media (max-width: 768px) {

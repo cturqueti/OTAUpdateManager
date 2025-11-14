@@ -3,6 +3,7 @@
 #include "../OTAPushUpdateManager.h"
 #include "InternalFunctions.h"
 #include <ArduinoJson.h>
+#include <LittleFS.h>
 
 void WebAssetManager::setupRoutes(AsyncWebServer *server)
 {
@@ -73,17 +74,29 @@ void WebAssetManager::setupRoutes(AsyncWebServer *server)
         File root = LittleFS.open(path);
         if (!root || !root.isDirectory()) {
             LOG_WARN("⚠️ Diretório não encontrado: %s", path.c_str());
-            request->send(404, "text/plain", "Directory not found: " + path);
+
+            JsonDocument doc;
+            doc["success"] = false;
+            doc["error"] = "Directory not found: " + path;
+            doc["path"] = path;
+
+            String jsonResponse;
+            serializeJson(doc, jsonResponse);
+            request->send(404, "application/json", jsonResponse);
             return;
         }
         
-        String json = "[";
+        JsonDocument doc;
+        doc["success"] = true;
+        doc["path"] = path;
+
+        JsonArray files = doc["files"].to<JsonArray>();
+        
         File file = root.openNextFile();
-        bool first = true;
+        int fileCount = 0;
         
         while (file) {
-            if (!first) json += ",";
-            first = false;
+            JsonObject fileObj = files.add<JsonObject>();
             
             // Extrair apenas o nome do arquivo (sem o path completo)
             String fileName = String(file.name());
@@ -91,23 +104,33 @@ void WebAssetManager::setupRoutes(AsyncWebServer *server)
                 fileName = fileName.substring(path.length());
             }
             
-            json += "{";
-            json += "\"name\":\"" + fileName + "\",";
-            json += "\"size\":" + String(file.size()) + ",";
-            json += "\"isDirectory\":" + String(file.isDirectory() ? "true" : "false");
-            json += "}";
+            fileObj["name"] = fileName;
+            fileObj["size"] = file.size();
+            fileObj["isDirectory"] = file.isDirectory();
+            fileObj["path"] = path + fileName;
+            
+            // Adicionar informações extras se disponíveis
+            if (!file.isDirectory()) {
+                fileObj["extension"] = getFileExtension(fileName);
+            }
             
             LOG_INFO("📄 Arquivo listado: %s (size: %d, dir: %s)", 
-                     fileName.c_str(), file.size(), file.isDirectory() ? "true" : "false");
+                    fileName.c_str(), file.size(), file.isDirectory() ? "true" : "false");
             
             file = root.openNextFile();
+            fileCount++;
         }
         
-        json += "]";
-        root.close();
-        
-        LOG_INFO("📊 Listagem concluída: %d arquivos", first ? 0 : json.length());
-        request->send(200, "application/json", json); });
+    root.close();
+    
+    doc["count"] = fileCount;
+    doc["totalSize"] = calculateDirectorySize(path); // Função opcional
+    
+    String jsonResponse;
+    serializeJson(doc, jsonResponse);
+    
+    LOG_INFO("📊 Listagem concluída: %d arquivos", fileCount);
+    request->send(200, "application/json", jsonResponse); });
 
     // API - HTTP GET
     server->on("/api/system-info", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -212,6 +235,8 @@ void WebAssetManager::setupRoutes(AsyncWebServer *server)
         doc["mac"] = WiFi.macAddress();
         doc["gateway"] = WiFi.gatewayIP().toString();
         doc["subnet"] = WiFi.subnetMask().toString();
+        doc["power"] = WiFi.getTxPower();
+
     } else {
         doc["ssid"] = "";
         doc["ip"] = "";
@@ -245,6 +270,7 @@ void WebAssetManager::setupRoutes(AsyncWebServer *server)
             network["rssi"] = WiFi.RSSI(i);
             network["encryption"] = getEncryptionType(WiFi.encryptionType(i));
             network["channel"] = WiFi.channel(i);
+            network["bssid"] = WiFi.BSSIDstr(i);
             
             LOG_DEBUG("📶 Rede: %s, RSSI: %d, Encryption: %s", 
                      WiFi.SSID(i).c_str(), WiFi.RSSI(i), 
@@ -256,6 +282,109 @@ void WebAssetManager::setupRoutes(AsyncWebServer *server)
     
     String jsonResponse;
     serializeJson(doc, jsonResponse);
+    request->send(200, "application/json", jsonResponse); });
+
+    server->on("/api/filesystem-info", HTTP_GET, [](AsyncWebServerRequest *request)
+               {
+    if (!request->hasParam("path")) {
+        request->send(400, "application/json", "{\"success\":false,\"error\":\"Path parameter required\"}");
+        return;
+    }
+    
+    String path = request->getParam("path")->value();
+    LOG_INFO("📄 Obtendo informações do arquivo: %s", path.c_str());
+    
+    JsonDocument doc;
+    
+    // Verifica se o arquivo/pasta existe
+    if (!LittleFS.exists(path)) {
+        doc["success"] = false;
+        doc["error"] = "File or directory not found: " + path;
+        doc["path"] = path;
+        
+        String jsonResponse;
+        serializeJson(doc, jsonResponse);
+        request->send(404, "application/json", jsonResponse);
+        return;
+    }
+    
+    File file = LittleFS.open(path, "r");
+    if (!file) {
+        doc["success"] = false;
+        doc["error"] = "Cannot open: " + path;
+        doc["path"] = path;
+        
+        String jsonResponse;
+        serializeJson(doc, jsonResponse);
+        request->send(500, "application/json", jsonResponse);
+        return;
+    }
+    
+    // Informações básicas
+    doc["success"] = true;
+    doc["path"] = path;
+    doc["name"] = path.substring(path.lastIndexOf('/') + 1);
+    doc["isDirectory"] = file.isDirectory();
+    doc["size"] = file.size();
+
+// Informações de tempo (se disponíveis)
+#ifdef ESP32
+    struct tm *timeinfo;
+    time_t lastWrite = file.getLastWrite();
+    if (lastWrite > 0) {
+        timeinfo = localtime(&lastWrite);
+        char timeStr[20];
+        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeinfo);
+        doc["modified"] = String(timeStr);
+        doc["lastModified"] = lastWrite;
+    }
+#endif
+    
+    // Para arquivos, obter extensão
+    if (!file.isDirectory()) {
+        String fileName = doc["name"].as<String>();
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex > 0 && dotIndex < fileName.length() - 1) {
+            doc["extension"] = fileName.substring(dotIndex + 1);
+        } else {
+            doc["extension"] = "";
+        }
+        
+        // Tipo MIME básico
+        doc["mimeType"] = getMimeType(doc["extension"].as<String>());
+    }
+    
+    // Para diretórios, contar arquivos
+    if (file.isDirectory()) {
+        int fileCount = 0;
+        int dirCount = 0;
+        size_t totalSize = 0;
+        
+        File entry = file.openNextFile();
+        while (entry) {
+            if (entry.isDirectory()) {
+                dirCount++;
+            } else {
+                fileCount++;
+                totalSize += entry.size();
+            }
+            entry = file.openNextFile();
+        }
+        
+        doc["fileCount"] = fileCount;
+        doc["dirCount"] = dirCount;
+        doc["totalSize"] = totalSize;
+        doc["totalItems"] = fileCount + dirCount;
+    }
+    
+    file.close();
+    
+    doc["fsInfo"] = getFileSystemInfo();
+    
+    String jsonResponse;
+    serializeJson(doc, jsonResponse);
+    
+    LOG_DEBUG("📊 Informações do arquivo: %s", jsonResponse.c_str());
     request->send(200, "application/json", jsonResponse); });
 
     // -------
@@ -775,3 +904,120 @@ bool WebAssetManager::deleteRecursive(String path)
 
     return LittleFS.rmdir(path);
 }
+
+String WebAssetManager::getFileExtension(const String &filename)
+{
+    int dotIndex = filename.lastIndexOf('.');
+    if (dotIndex == -1 || dotIndex == filename.length() - 1)
+    {
+        return "";
+    }
+    return filename.substring(dotIndex + 1);
+}
+
+size_t WebAssetManager::calculateDirectorySize(const String &path)
+{
+    size_t totalSize = 0;
+    File root = LittleFS.open(path);
+    if (!root || !root.isDirectory())
+        return 0;
+
+    File file = root.openNextFile();
+    while (file)
+    {
+        if (!file.isDirectory())
+        {
+            totalSize += file.size();
+        }
+        file = root.openNextFile();
+    }
+    root.close();
+    return totalSize;
+}
+
+String WebAssetManager::getMimeType(const String &extension)
+{
+    if (extension == "txt" || extension == "log")
+        return "text/plain";
+    if (extension == "html" || extension == "htm")
+        return "text/html";
+    if (extension == "css")
+        return "text/css";
+    if (extension == "js")
+        return "application/javascript";
+    if (extension == "json")
+        return "application/json";
+    if (extension == "xml")
+        return "application/xml";
+    if (extension == "pdf")
+        return "application/pdf";
+    if (extension == "zip")
+        return "application/zip";
+    if (extension == "jpg" || extension == "jpeg")
+        return "image/jpeg";
+    if (extension == "png")
+        return "image/png";
+    if (extension == "gif")
+        return "image/gif";
+    if (extension == "bmp")
+        return "image/bmp";
+    if (extension == "ico")
+        return "image/x-icon";
+    if (extension == "svg")
+        return "image/svg+xml";
+    if (extension == "mp3")
+        return "audio/mpeg";
+    if (extension == "wav")
+        return "audio/wav";
+    if (extension == "mp4")
+        return "video/mp4";
+    if (extension == "avi")
+        return "video/x-msvideo";
+    return "application/octet-stream";
+}
+
+String WebAssetManager::getFileSystemInfo()
+{
+    JsonDocument fsDoc;
+
+    // Método compatível com LittleFS - calcular uso manualmente
+    size_t totalBytes = LittleFS.totalBytes();
+    size_t usedBytes = LittleFS.usedBytes();
+
+    fsDoc["totalBytes"] = totalBytes;
+    fsDoc["usedBytes"] = usedBytes;
+    fsDoc["freeBytes"] = totalBytes - usedBytes;
+
+    if (totalBytes > 0)
+    {
+        fsDoc["percentUsed"] = (usedBytes * 100) / totalBytes;
+    }
+    else
+    {
+        fsDoc["percentUsed"] = 0;
+    }
+
+    String fsInfoStr;
+    serializeJson(fsDoc, fsInfoStr);
+    return fsInfoStr;
+}
+
+// void WebAssetManager::addFileSystemInfo(JsonDocument &doc)
+// {
+//     size_t totalBytes = LittleFS.totalBytes();
+//     size_t usedBytes = LittleFS.usedBytes();
+//     size_t freeBytes = totalBytes - usedBytes;
+
+//     doc["fsTotalBytes"] = totalBytes;
+//     doc["fsUsedBytes"] = usedBytes;
+//     doc["fsFreeBytes"] = freeBytes;
+
+//     if (totalBytes > 0)
+//     {
+//         doc["fsPercentUsed"] = (usedBytes * 100) / totalBytes;
+//     }
+//     else
+//     {
+//         doc["fsPercentUsed"] = 0;
+//     }
+// }

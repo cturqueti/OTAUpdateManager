@@ -1,0 +1,63 @@
+<!-- /components/navbar.html -->
+<nav class="navbar">
+    <a href="/" class="nav-brand">OTA Update</a>
+    
+    <div class="nav-links" id="navLinks">
+        <button class="theme-toggle nav-toggle" onclick="toggleTheme()">
+            ☀️
+        </button>
+    </div>
+
+    <!-- Menu hamburger -->
+    <div class="hamburger-menu" onclick="toggleMenu()">
+        <div class="hamburger-line"></div>
+        <div class="hamburger-line"></div>
+        <div class="hamburger-line"></div>
+    </div>
+
+    <!-- Dropdown menu -->
+    <div class="dropdown-menu" id="dropdownMenu">
+        <a href="/system.html" class="dropdown-item">
+            <span class="dropdown-icon">ℹ️</span>
+            Informações do Sistema
+        </a>
+        <div class="dropdown-divider"></div>
+        <a href="/config.html" class="dropdown-item">
+            <span class="dropdown-icon">⚙️</span>
+            Configurações do Sistema
+        </a>
+        <a href="/update.html" class="dropdown-item">
+            <span class="dropdown-icon">📤</span>
+            Firmware Upload
+        </a>
+        <a href="/filesystem.html" class="dropdown-item">
+            <span class="dropdown-icon">📁</span>
+            File Manager
+        </a>
+        <a href="/network.html" class="dropdown-item">
+            <span class="dropdown-icon">📡</span>
+            Configurações de Rede
+        </a>
+        <a href="/wifi.html" class="dropdown-item">
+            <span class="dropdown-icon">📶</span>
+            Configurações WiFi
+        </a>
+        <a href="/security.html" class="dropdown-item">
+            <span class="dropdown-icon">🔒</span>
+            Segurança
+        </a>
+        <a href="/backup.html" class="dropdown-item">
+            <span class="dropdown-icon">💾</span>
+            Backup & Restore
+        </a>
+        <div class="dropdown-divider"></div>
+        <a href="/logs.html" class="dropdown-item">
+            <span class="dropdown-icon">📋</span>
+            Logs do Sistema
+        </a>
+        <a href="/about.html" class="dropdown-item">
+            <span class="dropdown-icon">ℹ️</span>
+            Sobre
+        </a>
+    </div>
+</nav>

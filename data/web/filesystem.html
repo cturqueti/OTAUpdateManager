@@ -6,20 +6,24 @@
     <title>ESP32 OTA FileManager</title>
     <link rel="icon" type="image/png" href="/assets/icons/favicon.png">
     <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="stylesheet" href="/assets/css/components/navbar.css">
+    <link rel="stylesheet" href="/assets/css/components/buttons.css">
+    <link rel="stylesheet" href="/assets/css/components/cards.css">
+    <link rel="stylesheet" href="/assets/css/components/forms.css">
+    <link rel="stylesheet" href="/assets/css/components/modals.css">
+    <link rel="stylesheet" href="/assets/css/components/file-list.css">
+    <link rel="stylesheet" href="/assets/css/layouts/grid.css">
+    <link rel="stylesheet" href="/assets/css/layouts/responsive.css">
+    <link rel="stylesheet" href="/assets/css/utilities.css">
 </head>
 <body class="dark">
     <div class="container">
-        <nav class="navbar">
-            <a href="/" class="nav-brand">📁 File Manager</a>
-            <div class="nav-links">
-                <a href="/">Home</a>
-                <a href="/update.html">Upload</a>
-                <a href="/system.html">System</a>
-                <button class="theme-toggle nav-toggle" onclick="toggleTheme()">
-                    ☀️
-                </button>
+        <div id="navbar-container">
+            <!-- Navbar será carregada aqui via JavaScript -->
+            <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">
+                Carregando menu...
             </div>
-        </nav>
+        </div>
         
         <main class="main-content">
             <div class="header">
@@ -118,6 +122,7 @@
     </div>
 
     <script src="/assets/js/scripts.js"></script>
+    <script src="/assets/js/components.js"></script>
     <script src="/assets/js/filesystem.js"></script>
 
 </body>

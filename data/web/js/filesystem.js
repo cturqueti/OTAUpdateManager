@@ -68,7 +68,7 @@ function displayRealFiles(files, currentPath) {
         fileItem.className = `file-item ${item.isDirectory ? 'folder' : 'file'}`;
         
         const fullPath = currentPath + item.name + (item.isDirectory ? '/' : '');
-        const displaySize = item.isDirectory ? '-' : formatFileSize(item.size);
+        const displaySize = item.isDirectory ? '-' : formatBytes(item.size);
         const icon = item.isDirectory ? '📁' : '📄';
         
         fileItem.innerHTML = `

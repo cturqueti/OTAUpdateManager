@@ -1,0 +1,392 @@
+// network.js - JavaScript para gerenciamento de redes WiFi
+
+let currentNetworkInfo = {
+    ssid: '',
+    ip: '',
+    status: '',
+    rssi: 0
+};
+
+let availableNetworks = [];
+
+// Função para carregar informações da rede atual
+async function loadNetworkInfo() {
+    try {
+        const response = await fetch('/api/network/status');
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📡 Informações de rede:', data);
+        
+        currentNetworkInfo.ssid = data.ssid || 'Desconectado';
+        currentNetworkInfo.ip = data.ip || 'N/A';
+        currentNetworkInfo.status = data.status || 'Desconhecido';
+        currentNetworkInfo.rssi = data.rssi || 0;
+        
+        updateNetworkUI();
+        
+    } catch (error) {
+        console.error('❌ Erro ao carregar informações de rede:', error);
+        showError('Erro ao carregar informações de rede: ' + error.message);
+    }
+}
+
+// Função para buscar redes disponíveis
+async function scanNetworks() {
+    try {
+        showLoading('Buscando redes WiFi...');
+        
+        const response = await fetch('/api/network/scan');
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📶 Redes encontradas:', data);
+        
+        availableNetworks = data.networks || [];
+        updateNetworkList();
+        showSuccess(`Encontradas ${availableNetworks.length} redes`);
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar redes:', error);
+        showError('Erro ao buscar redes: ' + error.message);
+    }
+}
+
+// Função para atualizar a lista de redes no select
+function updateNetworkList() {
+    const wifiSelect = document.getElementById('wifiScan');
+    wifiSelect.innerHTML = '<option value="">Selecione uma rede</option>';
+    
+    availableNetworks.forEach(network => {
+        const option = document.createElement('option');
+        option.value = network.ssid;
+        
+        // Mostrar força do sinal com ícones
+        let signalIcon = '📶';
+        if (network.rssi > -50) signalIcon = '📶';
+        else if (network.rssi > -70) signalIcon = '📶';
+        else signalIcon = '📶';
+        
+        // Mostrar se é segura
+        const security = network.encryption !== 'OPEN' ? '🔒' : '🔓';
+        
+        option.textContent = `${signalIcon} ${security} ${network.ssid} (${network.rssi} dBm)`;
+        wifiSelect.appendChild(option);
+    });
+    
+    // Adicionar opção para rede oculta
+    const hiddenOption = document.createElement('option');
+    hiddenOption.value = "hidden";
+    hiddenOption.textContent = "🌐 Rede Ocultra (digite o nome manualmente)";
+    wifiSelect.appendChild(hiddenOption);
+}
+
+// Função chamada quando uma rede é selecionada da lista
+function networkSelected() {
+    const wifiSelect = document.getElementById('wifiScan');
+    const ssidInput = document.getElementById('ssid');
+    
+    if (wifiSelect.value && wifiSelect.value !== "hidden") {
+        ssidInput.value = wifiSelect.value;
+    } else if (wifiSelect.value === "hidden") {
+        ssidInput.value = "";
+        ssidInput.focus();
+        ssidInput.placeholder = "Digite o nome da rede oculta";
+    }
+}
+
+// Função para salvar configuração WiFi
+async function saveWiFiConfig() {
+    try {
+        const ssid = document.getElementById('ssid').value.trim();
+        const password = document.getElementById('password').value;
+        
+        if (!ssid) {
+            showError('Por favor, informe o SSID da rede');
+            return;
+        }
+        
+        showLoading('Conectando à rede...');
+        
+        const config = {
+            ssid: ssid,
+            password: password
+        };
+        
+        console.log('📤 Enviando configuração WiFi:', { ...config, password: '***' });
+        
+        const response = await fetch('/api/network/connect', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const result = await response.json();
+        console.log('✅ Resposta da conexão:', result);
+        
+        showConnectionStatus('Conectando à rede ' + ssid + '...', 'info');
+        
+        // Monitorar status da conexão
+        monitorConnection(ssid);
+        
+    } catch (error) {
+        console.error('❌ Erro ao conectar:', error);
+        showError('Erro ao conectar: ' + error.message);
+        showConnectionStatus('Falha na conexão: ' + error.message, 'error');
+    }
+}
+
+// Função para monitorar o status da conexão
+async function monitorConnection(ssid) {
+    let attempts = 0;
+    const maxAttempts = 30; // 30 tentativas (30 segundos)
+    
+    const interval = setInterval(async () => {
+        attempts++;
+        
+        try {
+            const response = await fetch('/api/network/status');
+            if (response.ok) {
+                const status = await response.json();
+                
+                if (status.ssid === ssid && status.status === 'Conectado') {
+                    clearInterval(interval);
+                    showConnectionStatus('✅ Conectado com sucesso à rede ' + ssid, 'success');
+                    showSuccess('Conectado à rede ' + ssid);
+                    loadNetworkInfo(); // Atualizar informações
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(interval);
+                    showConnectionStatus('❌ Timeout: Não foi possível conectar à rede', 'error');
+                    showError('Timeout na conexão com ' + ssid);
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao verificar status:', error);
+        }
+        
+        if (attempts >= maxAttempts) {
+            clearInterval(interval);
+            showConnectionStatus('❌ Timeout: Não foi possível conectar à rede', 'error');
+        }
+    }, 1000);
+}
+
+// Função para limpar configuração WiFi
+async function clearWiFiConfig() {
+    if (!confirm('Tem certeza que deseja limpar a configuração WiFi atual?')) {
+        return;
+    }
+    
+    try {
+        showLoading('Limpando configuração...');
+        
+        const response = await fetch('/api/network/clear', {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+        
+        showSuccess('Configuração WiFi limpa. O ESP32 reiniciará no modo AP.');
+        showConnectionStatus('Configuração limpa. Reiniciando...', 'info');
+        
+        // Recarregar após um tempo
+        setTimeout(() => {
+            loadNetworkInfo();
+        }, 3000);
+        
+    } catch (error) {
+        console.error('❌ Erro ao limpar configuração:', error);
+        showError('Erro ao limpar configuração: ' + error.message);
+    }
+}
+
+// Função para atualizar a UI com informações da rede
+function updateNetworkUI() {
+    document.getElementById('currentSSID').textContent = currentNetworkInfo.ssid;
+    document.getElementById('currentIP').textContent = currentNetworkInfo.ip;
+    document.getElementById('wifiStatus').textContent = currentNetworkInfo.status;
+    
+    // Atualizar força do sinal
+    const signalElement = document.getElementById('signalStrength');
+    if (currentNetworkInfo.rssi === 0) {
+        signalElement.textContent = 'N/A';
+    } else {
+        let signalText = `${currentNetworkInfo.rssi} dBm - `;
+        if (currentNetworkInfo.rssi > -50) signalText += 'Excelente';
+        else if (currentNetworkInfo.rssi > -60) signalText += 'Bom';
+        else if (currentNetworkInfo.rssi > -70) signalText += 'Regular';
+        else signalText += 'Ruim';
+        
+        signalElement.textContent = signalText;
+    }
+}
+
+// Função para mostrar status da conexão
+function showConnectionStatus(message, type) {
+    const statusElement = document.getElementById('connectionStatus');
+    statusElement.style.display = 'block';
+    
+    const colors = {
+        success: 'var(--success)',
+        error: 'var(--error)',
+        info: 'var(--accent-primary)',
+        warning: 'var(--warning)'
+    };
+    
+    statusElement.innerHTML = `
+        <div style="background: ${colors[type]}; color: white; padding: 1rem; border-radius: 0.5rem; text-align: center;">
+            ${message}
+        </div>
+    `;
+}
+
+// Função para alternar modo AP
+function toggleAPMode() {
+    const apConfigGroup = document.getElementById('apConfigGroup');
+    const enableAP = document.getElementById('enableAP').checked;
+    
+    apConfigGroup.style.display = enableAP ? 'block' : 'none';
+}
+
+// Função para salvar configuração AP
+async function saveAPConfig() {
+    try {
+        const apSSID = document.getElementById('apSSID').value.trim();
+        const apPassword = document.getElementById('apPassword').value;
+        
+        if (!apSSID) {
+            showError('Por favor, informe o nome do Access Point');
+            return;
+        }
+        
+        showLoading('Salvando configuração AP...');
+        
+        const config = {
+            ap_ssid: apSSID,
+            ap_password: apPassword
+        };
+        
+        const response = await fetch('/api/network/ap-config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+        
+        showSuccess('Configuração do Access Point salva com sucesso');
+        
+    } catch (error) {
+        console.error('❌ Erro ao salvar configuração AP:', error);
+        showError('Erro ao salvar configuração AP: ' + error.message);
+    }
+}
+
+// Funções auxiliares
+function showLoading(message = 'Carregando...') {
+    console.log('⏳ ' + message);
+}
+
+function showSuccess(message) {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--success);
+        color: white;
+        padding: 1rem;
+        border-radius: 0.375rem;
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+    `;
+    notification.textContent = '✅ ' + message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+
+function showError(message) {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--error);
+        color: white;
+        padding: 1rem;
+        border-radius: 0.375rem;
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+    `;
+    notification.textContent = '❌ ' + message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.remove();
+    }, 5000);
+}
+
+// Inicialização quando a página carrega
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Página de rede inicializada');
+    
+    // Carrega informações da rede atual
+    loadNetworkInfo();
+    
+    // Configurar evento no select de redes
+    document.getElementById('wifiScan').addEventListener('change', networkSelected);
+    
+    // Atualizar informações do sistema
+    updateSystemInfo();
+    setInterval(updateSystemInfo, 30000);
+});
+
+// Funções para atualizar tempo e uptime
+function updateCurrentTime() {
+    const now = new Date();
+    document.getElementById('currentTime').textContent = 
+        now.toLocaleString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+}
+
+async function updateSystemInfo() {
+    try {
+        const response = await fetch('/api/uptime');
+        if (response.ok) {
+            const uptime = await response.text();
+            document.getElementById('uptime').textContent = `Uptime: ${uptime}`;
+        }
+    } catch (error) {
+        console.log('Não foi possível atualizar uptime');
+    }
+    
+    updateCurrentTime();
+}
+
+setInterval(updateCurrentTime, 1000);

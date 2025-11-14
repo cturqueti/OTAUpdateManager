@@ -9,11 +9,13 @@ bool OTAManager::_updateAvailable = false;
 String OTAManager::_latestVersion = "";
 String OTAManager::_currentVersion = FIRMWARE_VERSION;
 
+// ✅ NOVAS VARIÁVEIS INICIALIZADAS
 bool OTAManager::_autoUpdateEnabled = true; // Padrão: habilitado
 int OTAManager::_updateIntervalHours = 24;  // Padrão: 24 horas
 unsigned long OTAManager::_lastUpdateCheck = 0;
 unsigned long OTAManager::_lastConfigSave = 0;
 
+// ✅ Preferences para armazenamento persistente
 Preferences preferences;
 
 void OTAManager::begin(const String &serverUrl, uint16_t webPort, UpdateMode mode)
@@ -21,6 +23,9 @@ void OTAManager::begin(const String &serverUrl, uint16_t webPort, UpdateMode mod
     init();
     _serverUrl = serverUrl;
     _currentMode = mode;
+
+    // ✅ CARREGA CONFIGURAÇÕES SALVAS
+    loadConfig();
 
     // Sempre inicia o sistema Push (web)
     OTAPushUpdateManager::begin(webPort);
@@ -40,7 +45,7 @@ void OTAManager::begin(const String &serverUrl, uint16_t webPort, UpdateMode mod
     LOG_INFO("📝 Chamando WebAssetManager::checkRequiredAssets()");
     WebAssetManager::checkRequiredAssets();
 
-    // ✅ ADICIONAR: Configurar callbacks para o sistema Push
+    // ✅ Configurar callbacks para o sistema Push
     OTAPushUpdateManager::setPullUpdateCallback([]() -> bool
                                                 { return OTAManager::isUpdateAvailable(); });
 
@@ -54,179 +59,22 @@ void OTAManager::begin(const String &serverUrl, uint16_t webPort, UpdateMode mod
     {
         OTAPullUpdateManager::init(serverUrl);
 
-        if (mode == AUTOMATIC)
+        // ✅ VERIFICA SE AUTO UPDATE ESTÁ HABILITADO
+        if (mode == AUTOMATIC && _autoUpdateEnabled)
         {
-            // Inicia thread de verificação automática a cada 5 minutos
-            OTAPullUpdateManager::startUpdateThread(5);
+            // Inicia thread de verificação automática com intervalo configurado
+            OTAPullUpdateManager::startUpdateThread(_updateIntervalHours * 60); // Converte horas para minutos
         }
     }
 
-    LOG_INFO("✅ OTA Manager inicializado - Modo: %s",
+    LOG_INFO("✅ OTA Manager inicializado - Modo: %s, AutoUpdate: %s, Intervalo: %d horas",
              mode == MANUAL ? "Manual" : mode == AUTOMATIC ? "Automático"
-                                                           : "Híbrido");
+                                                           : "Híbrido",
+             _autoUpdateEnabled ? "Ativado" : "Desativado",
+             _updateIntervalHours);
 }
 
-void OTAManager::end()
-{
-    OTAPushUpdateManager::stop();
-    OTAPullUpdateManager::stopUpdateThread();
-}
-
-void OTAManager::setWebCredentials(const String &username, const String &password)
-{
-    OTAPushUpdateManager::setCredentials(username, password);
-}
-
-void OTAManager::setMDNS(const String &hostname)
-{
-    OTAPushUpdateManager::setMDNS(hostname);
-}
-
-bool OTAManager::isUpdateAvailable()
-{
-    return _updateAvailable;
-}
-
-void OTAManager::performUpdate()
-{
-    if (_updateAvailable && _currentMode != MANUAL)
-    {
-        LOG_INFO("🚀 Iniciando atualização pull...");
-        OTAPullUpdateManager::checkForUpdates();
-    }
-}
-
-String OTAManager::getServerUrl()
-{
-    return _serverUrl;
-}
-
-void OTAManager::setServerUrl(const String &serverUrl)
-{
-    _serverUrl = serverUrl;
-    saveConfig(); // Salva a configuração
-
-    // Reinicia o sistema pull se necessário
-    if (_autoUpdateEnabled && _currentMode != MANUAL && !serverUrl.isEmpty())
-    {
-        OTAPullUpdateManager::init(serverUrl);
-        if (_currentMode == AUTOMATIC)
-        {
-            OTAPullUpdateManager::startUpdateThread(_updateIntervalHours * 60);
-        }
-    }
-
-    LOG_INFO("🔧 URL do servidor atualizado: %s", serverUrl.c_str());
-}
-
-OTAManager::VersionComparison OTAManager::compareVersions(const String &v1, const String &v2)
-{
-    // Remove possíveis "v" no início
-    String version1 = v1;
-    String version2 = v2;
-
-    if (version1.startsWith("v") || version1.startsWith("V"))
-    {
-        version1 = version1.substring(1);
-    }
-    if (version2.startsWith("v") || version2.startsWith("V"))
-    {
-        version2 = version2.substring(1);
-    }
-
-    // Arrays para armazenar as partes das versões (major.minor.patch)
-    int parts1[3] = {0, 0, 0};
-    int parts2[3] = {0, 0, 0};
-
-    // Parse da primeira versão
-    int count1 = 0;
-    int start1 = 0;
-    for (int i = 0; i <= version1.length() && count1 < 3; i++)
-    {
-        if (i == version1.length() || version1[i] == '.')
-        {
-            parts1[count1] = version1.substring(start1, i).toInt();
-            start1 = i + 1;
-            count1++;
-        }
-    }
-
-    // Parse da segunda versão
-    int count2 = 0;
-    int start2 = 0;
-    for (int i = 0; i <= version2.length() && count2 < 3; i++)
-    {
-        if (i == version2.length() || version2[i] == '.')
-        {
-            parts2[count2] = version2.substring(start2, i).toInt();
-            start2 = i + 1;
-            count2++;
-        }
-    }
-
-    // Comparação semântica: major -> minor -> patch
-    for (int i = 0; i < 3; i++)
-    {
-        if (parts1[i] > parts2[i])
-            return VERSION_NEWER;
-        if (parts1[i] < parts2[i])
-            return VERSION_OLDER;
-    }
-
-    return VERSION_EQUAL;
-}
-
-OTAManager::UpdateMode OTAManager::getCurrentMode()
-{
-    return _currentMode;
-}
-
-String OTAManager::getLatestVersion()
-{
-    return _latestVersion;
-}
-
-String OTAManager::getUpdateStatus()
-{
-    String currentVersion = OTAPullUpdateManager::getCurrentVersion();
-
-    String status = "OTA - Modo: ";
-    status += (_currentMode == MANUAL ? "Manual" : _currentMode == AUTOMATIC ? "Automático"
-                                                                             : "Híbrido");
-    status += " | Versão: v" + currentVersion;
-
-    if (!_serverUrl.isEmpty())
-    {
-        status += " | Servidor: " + _serverUrl;
-
-        if (_updateAvailable && !_latestVersion.isEmpty())
-        {
-            VersionComparison comp = compareVersions(_latestVersion, currentVersion);
-            String statusText;
-
-            switch (comp)
-            {
-            case VERSION_NEWER:
-                statusText = "ATUALIZAR ↗ v" + _latestVersion;
-                break;
-            case VERSION_OLDER:
-                statusText = "REGREDIR ↘ v" + _latestVersion;
-                break;
-            case VERSION_EQUAL:
-                statusText = "IGUAL ≡ v" + _latestVersion;
-                break;
-            }
-
-            status += " | Status: " + statusText;
-        }
-        else
-        {
-            status += " | Status: Atualizado ✓";
-        }
-    }
-
-    return status;
-}
+// ✅ IMPLEMENTAÇÃO DAS NOVAS FUNÇÕES
 
 bool OTAManager::isAutoUpdateEnabled()
 {
@@ -338,7 +186,7 @@ void OTAManager::loadConfig()
     LittleFS.end();
 
     // Parse do JSON
-    JsonDocument doc;
+    DynamicJsonDocument doc(512);
     DeserializationError error = deserializeJson(doc, jsonStr);
 
     if (error)
@@ -379,7 +227,7 @@ void OTAManager::saveConfig()
     }
 
     // Cria JSON
-    JsonDocument doc;
+    DynamicJsonDocument doc(512);
     doc["autoUpdate"] = _autoUpdateEnabled;
     doc["updateInterval"] = _updateIntervalHours;
     doc["lastUpdateCheck"] = _lastUpdateCheck;
@@ -451,95 +299,7 @@ void OTAManager::checkForUpdates()
     }
 }
 
-String OTAManager::getFirmwareVersion()
-{
-    return _currentVersion;
-}
-
-void OTAManager::setFirmwareVersion(const String &version)
-{
-    if (writeVersion(version) != ESP_OK)
-    {
-        LOG_ERROR("Falha ao atualizar versão salva");
-        return;
-    }
-    _currentVersion = version;
-    LOG_INFO("✅ Versão do firmware atualizada para: %s", version.c_str());
-}
-
-esp_err_t OTAManager::init()
-{
-    if (!LittleFS.begin(true))
-    {
-        LOG_ERROR("Falha ao montar LittleFS");
-        return ESP_ERR_FLASH_NOT_INITIALISED;
-    }
-
-    if (!LittleFS.exists("/ota_version.txt"))
-    {
-        LOG_WARN("Nenhuma versão armazenada encontrada, usando padrão");
-        LittleFS.end();
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    File file = LittleFS.open("/ota_version.txt", "r");
-    if (!file)
-    {
-        LOG_ERROR("Falha ao abrir arquivo de versão");
-        LittleFS.end();
-        return ESP_ERR_NOT_SUPPORTED;
-    }
-    String fileVersion = file.readString();
-    file.close();
-    LittleFS.end();
-
-    VersionComparison result = compareVersions(FIRMWARE_VERSION, fileVersion);
-
-    LOG_INFO("Versão armazenada: %s", fileVersion.c_str());
-
-    if (result == VERSION_NEWER)
-    {
-        LOG_INFO("Nova versão disponível, atualizando versão salva...");
-        return writeVersion(FIRMWARE_VERSION);
-    }
-    else if (result == VERSION_OLDER)
-    {
-        LOG_INFO("Versão no LittleFS é mais nova, mantendo...");
-        _currentVersion = fileVersion;
-        return ESP_OK;
-    }
-    else
-    {
-        LOG_INFO("Versão armazenada igual ao atual");
-        _currentVersion = fileVersion;
-        return ESP_OK;
-    }
-}
-
-esp_err_t OTAManager::writeVersion(const String &version)
-{
-    if (!LittleFS.begin(true))
-    {
-        LOG_ERROR("Falha ao montar LittleFS");
-        return ESP_ERR_FLASH_NOT_INITIALISED;
-    }
-
-    File file = LittleFS.open("/ota_version.txt", "w");
-    if (!file)
-    {
-        LOG_ERROR("Falha ao criar arquivo de versão");
-        LittleFS.end();
-        return ESP_ERR_NOT_SUPPORTED;
-    }
-
-    file.print(version);
-    file.close();
-    LittleFS.end();
-
-    LOG_INFO("Versão atual salva: %s", version.c_str());
-    _currentVersion = version;
-    return ESP_OK;
-}
+// ✅ ATUALIZAÇÃO DA FUNÇÃO setUpdateMode PARA CONSIDERAR AUTO UPDATE
 
 void OTAManager::setUpdateMode(UpdateMode mode)
 {
@@ -559,6 +319,8 @@ void OTAManager::setUpdateMode(UpdateMode mode)
                                                            : "Híbrido",
              _autoUpdateEnabled ? "Ativado" : "Desativado");
 }
+
+// ✅ ATUALIZAÇÃO DA FUNÇÃO setPullInterval PARA USAR CONFIGURAÇÃO
 
 void OTAManager::setPullInterval(uint16_t minutes)
 {

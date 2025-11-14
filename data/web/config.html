@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - ESP32 OTA</title>
+    <link rel="icon" type="image/png" href="/assets/icons/favicon.png">
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="stylesheet" href="/assets/css/components/navbar.css">
+    <link rel="stylesheet" href="/assets/css/components/buttons.css">
+    <link rel="stylesheet" href="/assets/css/components/cards.css">
+    <link rel="stylesheet" href="/assets/css/components/forms.css">
+    <link rel="stylesheet" href="/assets/css/layouts/grid.css">
+    <link rel="stylesheet" href="/assets/css/layouts/responsive.css">
+    <link rel="stylesheet" href="/assets/css/utilities.css">
+</head>
+<body class="dark">
+    <div class="container">
+        <div id="navbar-container">
+            <!-- Navbar será carregada aqui via JavaScript -->
+            <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">
+                Carregando menu...
+            </div>
+        </div>
+        
+        <main class="main-content">
+            <div class="header">
+                <div class="header-left">
+                    <h1>Configurações</h1>
+                    <div class="time-info">
+                        <div class="system-time" id="currentTime">Carregando...</div>
+                        <div class="uptime" id="uptime">Uptime: Carregando...</div>
+                    </div>
+                </div>
+                <button class="theme-toggle" onclick="toggleTheme()">
+                    ☀️
+                </button>
+            </div>
+            
+            <div class="config-section">
+                <div class="config-card">
+                    <h3>⚙️ Configurações de Atualização</h3>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="autoUpdate" onchange="toggleAutoUpdate()">
+                            <span class="checkmark"></span>
+                            Atualização Automática
+                        </label>
+                        <p class="form-help">Quando ativado, o sistema verificará automaticamente por atualizações de firmware.</p>
+                    </div>
+
+                    <div class="form-group" id="serverUrlGroup" style="display: none;">
+                        <label for="serverUrl">URL do Servidor de Atualização:</label>
+                        <input type="text" id="serverUrl" class="input-field" 
+                            placeholder="https://seuservidor.com/atualizacoes" 
+                            onchange="serverUrlChanged()">
+                        <p class="form-help">Endereço do servidor onde estão disponíveis as atualizações de firmware.</p>
+                    </div>
+
+                    <div class="form-group" id="updateIntervalGroup" style="display: none;">
+                        <label for="updateInterval">Intervalo de Verificação (horas):</label>
+                        <select id="updateInterval" class="form-select" onchange="updateIntervalChanged()">
+                            <option value="1">1 hora</option>
+                            <option value="2">2 horas</option>
+                            <option value="6">6 horas</option>
+                            <option value="12">12 horas</option>
+                            <option value="24">24 horas</option>
+                            <option value="168">1 semana</option>
+                        </select>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="btn btn-primary" onclick="saveSettings()">
+                            💾 Salvar Configurações
+                        </button>
+                        <button class="btn btn-secondary" onclick="loadSettings()">
+                            🔄 Recarregar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="status-item">
+                    <span class="status-label">Modo OTA:</span>
+                    <span class="status-value" id="currentMode">Carregando...</span>
+                </div>
+
+                <div class="config-card">
+                    <h3>📊 Status Atual</h3>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <span class="status-label">Atualização Automática:</span>
+                            <span class="status-value" id="currentAutoUpdateStatus">Carregando...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">URL do Servidor:</span>
+                            <span class="status-value" id="currentServerUrl">Carregando...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Intervalo Atual:</span>
+                            <span class="status-value" id="currentUpdateInterval">Carregando...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Última Verificação:</span>
+                            <span class="status-value" id="lastUpdateCheck">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="footer">
+            <p>ESP32 - <span id="hostInfo">Carregando...</span></p>
+        </footer>
+    </div>
+
+    <script src="/assets/js/scripts.js"></script>
+    <script src="/assets/js/components.js"></script>
+    <script src="/assets/js/config.js"></script>
+</body>
+</html>

@@ -109,6 +109,275 @@ void WebAssetManager::setupRoutes(AsyncWebServer *server)
         LOG_INFO("📊 Listagem concluída: %d arquivos", first ? 0 : json.length());
         request->send(200, "application/json", json); });
 
+    // API - HTTP GET
+    server->on("/api/system-info", HTTP_GET, [](AsyncWebServerRequest *request)
+               {
+    LOG_INFO("📊 API System Info solicitada");
+    
+    // Cria o documento JSON
+    JsonDocument doc;
+    
+    // Adiciona dados do sistema
+    JsonObject wifi = doc["wifi"].to<JsonObject>();
+    wifi["ip"] = WiFi.localIP().toString();
+    wifi["ssid"] = WiFi.SSID();
+    wifi["rssi"] = WiFi.RSSI();
+    wifi["mac"] = WiFi.macAddress();
+    wifi["hostname"] = WiFi.getHostname();
+    wifi["gateway"] = WiFi.gatewayIP().toString();
+    wifi["subnet"] = WiFi.subnetMask().toString();
+    wifi["dns"] = WiFi.dnsIP().toString();
+    wifi["mDNS"] = OTAPushUpdateManager::getMDNSHostname()+".local";
+
+    JsonObject hardware = doc["hardware"].to<JsonObject>();
+        hardware["chipModel"] = ESP.getChipModel();
+    hardware["chipCores"] = ESP.getChipCores();
+    hardware["chipRevision"] = ESP.getChipRevision();
+    hardware["cpuFreq"] = ESP.getCpuFreqMHz();
+    hardware["heapFree"] = ESP.getFreeHeap();
+    hardware["heapTotal"] = ESP.getHeapSize();
+    hardware["heapMin"] = ESP.getMinFreeHeap();
+    hardware["psramSize"] = ESP.getPsramSize();
+    hardware["flashSize"] = ESP.getFlashChipSize();
+    hardware["flashSpeed"] = ESP.getFlashChipSpeed();
+    hardware["sdkVersion"] = ESP.getSdkVersion();
+
+    JsonObject system = doc["system"].to<JsonObject>();
+        system["firmwareVersion"] = String(OTAManager::getFirmwareVersion().c_str());
+    system["uptime"] = millis();
+    system["currentTime"] = InternalFunctions::getCurrentDateTime();
+    system["resetReason"] = "fazer isso";
+    system["resetInfo"] = "fazer isso";
+
+        JsonObject filesystem = doc["filesystem"].to<JsonObject>();
+    filesystem["totalBytes"] = LittleFS.totalBytes();
+    filesystem["usedBytes"] = LittleFS.usedBytes();
+    filesystem["freeBytes"] = LittleFS.totalBytes() - LittleFS.usedBytes();
+    
+    // Serializa o JSON para string
+    String jsonResponse;
+    serializeJson(doc, jsonResponse);
+    
+    LOG_INFO("📤 Enviando system info: %s", jsonResponse.c_str());
+    request->send(200, "application/json", jsonResponse); });
+
+    server->on("/api/uptime", HTTP_GET, [](AsyncWebServerRequest *request)
+               {
+    unsigned long milliseconds = millis();
+    unsigned long seconds = milliseconds / 1000;
+    unsigned long minutes = seconds / 60;
+    unsigned long hours = minutes / 60;
+    unsigned long days = hours / 24;
+    
+    String uptime = String(days) + "d " + 
+                   String(hours % 24) + "h " + 
+                   String(minutes % 60) + "m " + 
+                   String(seconds % 60) + "s";
+    
+    request->send(200, "text/plain", uptime); });
+
+    server->on("/api/debug", HTTP_GET, [](AsyncWebServerRequest *request)
+               {
+        LOG_INFO("🎯 Rota /api/debug acessada");
+        request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"API working\"}"); });
+
+    server->on("/api/config", HTTP_GET, [](AsyncWebServerRequest *request)
+               {
+    LOG_INFO("📊 API Config - Obtendo configurações");
+    
+    JsonDocument doc;
+    doc["autoUpdate"] = OTAManager::isAutoUpdateEnabled();
+    doc["serverUrl"] = OTAManager::getServerUrl();
+    doc["updateInterval"] = OTAManager::getUpdateInterval();
+    doc["lastUpdateCheck"] = OTAManager::getLastUpdateCheck();
+    doc["currentMode"] = (int)OTAManager::getCurrentMode();
+    
+    String jsonResponse;
+    serializeJson(doc, jsonResponse);
+    
+    LOG_INFO("📤 Enviando configurações: %s", jsonResponse.c_str());
+    request->send(200, "application/json", jsonResponse); });
+
+    server->on("/api/network/status", HTTP_GET, [](AsyncWebServerRequest *request)
+               {
+    LOG_INFO("📡 Obtendo status da rede");
+    
+    JsonDocument doc;
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        doc["ssid"] = WiFi.SSID();
+        doc["ip"] = WiFi.localIP().toString();
+        doc["status"] = "Conectado";
+        doc["rssi"] = WiFi.RSSI();
+        doc["mac"] = WiFi.macAddress();
+        doc["gateway"] = WiFi.gatewayIP().toString();
+        doc["subnet"] = WiFi.subnetMask().toString();
+    } else {
+        doc["ssid"] = "";
+        doc["ip"] = "";
+        doc["status"] = "Desconectado";
+        doc["rssi"] = 0;
+        doc["mac"] = WiFi.macAddress();
+    }
+    
+    String jsonResponse;
+    serializeJson(doc, jsonResponse);
+    request->send(200, "application/json", jsonResponse); });
+
+    server->on("/api/network/scan", HTTP_GET, [](AsyncWebServerRequest *request)
+               {
+    LOG_INFO("🔍 Escaneando redes WiFi");
+    
+    int numNetworks = WiFi.scanNetworks(/*async=*/false, /*hidden=*/true);
+
+    JsonDocument doc;
+    JsonArray networks = doc["networks"].to<JsonArray>();
+    
+    if (numNetworks == 0) {
+        LOG_INFO("📶 Nenhuma rede encontrada");
+        doc["message"] = "Nenhuma rede WiFi encontrada";
+    } else {
+        LOG_INFO("📶 Encontradas %d redes", numNetworks);
+        
+        for (int i = 0; i < numNetworks; i++) {
+            JsonObject network = networks.add<JsonObject>();
+            network["ssid"] = WiFi.SSID(i);
+            network["rssi"] = WiFi.RSSI(i);
+            network["encryption"] = getEncryptionType(WiFi.encryptionType(i));
+            network["channel"] = WiFi.channel(i);
+            
+            LOG_DEBUG("📶 Rede: %s, RSSI: %d, Encryption: %s", 
+                     WiFi.SSID(i).c_str(), WiFi.RSSI(i), 
+                     getEncryptionType(WiFi.encryptionType(i)).c_str());
+        }
+    }
+    
+    WiFi.scanDelete(); // Limpa a lista de scan
+    
+    String jsonResponse;
+    serializeJson(doc, jsonResponse);
+    request->send(200, "application/json", jsonResponse); });
+
+    // -------
+
+    // API - HTTP POST
+    server->on("/api/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+               {
+    if (index == 0) {
+        LOG_INFO("📝 API Config - Salvando configurações");
+    }
+    
+    // Processa os dados JSON recebidos
+    String body = String((char*)data, len);
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, body);
+    
+    if (error) {
+        LOG_ERROR("❌ Erro ao parsear JSON: %s", error.c_str());
+        request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+        return;
+    }
+    
+    // Atualiza as configurações
+    if (doc["autoUpdate"].is<bool>()) {
+        bool autoUpdate = doc["autoUpdate"];
+        OTAManager::setAutoUpdateEnabled(autoUpdate);
+        LOG_INFO("🔧 Auto Update: %s", autoUpdate ? "true" : "false");
+    }
+    
+    if (doc["serverUrl"].is<String>()) {
+        String serverUrl = doc["serverUrl"].as<String>();
+        OTAManager::setServerUrl(serverUrl);
+        LOG_INFO("🔧 Server URL: %s", serverUrl.c_str());
+    }
+    
+    if (doc["updateInterval"].is<int>()) {
+        int interval = doc["updateInterval"];
+        OTAManager::setUpdateInterval(interval);
+        LOG_INFO("🔧 Update Interval: %d horas", interval);
+    }
+    
+    if (index + len == total) {
+        JsonDocument responseDoc;
+        responseDoc["status"] = "success";
+        responseDoc["message"] = "Configurações salvas com sucesso";
+        responseDoc["autoUpdate"] = OTAManager::isAutoUpdateEnabled();
+        responseDoc["updateInterval"] = OTAManager::getUpdateInterval();
+        responseDoc["lastUpdateCheck"] = OTAManager::getLastUpdateCheck();
+        
+        String jsonResponse;
+        serializeJson(responseDoc, jsonResponse);
+        request->send(200, "application/json", jsonResponse);
+        
+        LOG_INFO("✅ Configurações salvas com sucesso");
+    } });
+
+    server->on("/api/network/connect", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+               {
+    if (index == 0) {
+        LOG_INFO("📶 Conectando à rede WiFi");
+    }
+    
+    String body = String((char*)data, len);
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, body);
+    
+    if (error) {
+        LOG_ERROR("❌ Erro ao parsear JSON: %s", error.c_str());
+        request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+        return;
+    }
+    
+    String ssid = doc["ssid"].as<String>();
+    String password = doc["password"].as<String>();
+    
+    if (ssid.isEmpty()) {
+        request->send(400, "application/json", "{\"error\":\"SSID is required\"}");
+        return;
+    }
+    
+    // Salvar credenciais na preferências (não na LittleFS)
+    Preferences preferences;
+    preferences.begin("wifi-config", false);
+    preferences.putString("ssid", ssid);
+    preferences.putString("password", password);
+    preferences.end();
+    
+    LOG_INFO("🔑 Credenciais salvas - Conectando à: %s", ssid.c_str());
+    
+    // Tentar conectar
+    WiFi.begin(ssid.c_str(), password.c_str());
+    
+    JsonDocument responseDoc;
+    responseDoc["status"] = "connecting";
+    responseDoc["message"] = "Conectando à rede " + ssid;
+    responseDoc["ssid"] = ssid;
+    
+    String jsonResponse;
+    serializeJson(responseDoc, jsonResponse);
+    request->send(200, "application/json", jsonResponse); });
+
+    server->on("/api/network/clear", HTTP_POST, [](AsyncWebServerRequest *request)
+               {
+    LOG_INFO("🗑️ Limpando configuração WiFi");
+    
+    // Limpar credenciais salvas
+    Preferences preferences;
+    preferences.begin("wifi-config", false);
+    preferences.clear();
+    preferences.end();
+    
+    // Desconectar
+    WiFi.disconnect(true);
+    delay(1000);
+    
+    // Iniciar modo AP
+    WiFi.softAP("ESP32-OTA", "");
+    
+    request->send(200, "application/json", "{\"status\":\"cleared\", \"message\":\"WiFi config cleared\"}"); });
+
+    // -------
+
     // ✅ Rota para verificar status do LittleFS
     server->on("/filesystem-status", HTTP_GET, [](AsyncWebServerRequest *request)
                {
@@ -242,81 +511,19 @@ void WebAssetManager::setupRoutes(AsyncWebServer *server)
                { handleFilesystemUpload(request, filename, index, data, len, final); });
 
     // ✅ Rota para informações do sistema em JSON (usando ArduinoJson)
-    server->on("/api/system-info", HTTP_GET, [](AsyncWebServerRequest *request)
-               {
-    LOG_INFO("📊 API System Info solicitada");
-    
-    // Cria o documento JSON
-    JsonDocument doc;
-    
-    // Adiciona dados do sistema
-    JsonObject wifi = doc["wifi"].to<JsonObject>();
-    wifi["ip"] = WiFi.localIP().toString();
-    wifi["ssid"] = WiFi.SSID();
-    wifi["rssi"] = WiFi.RSSI();
-    wifi["mac"] = WiFi.macAddress();
-    wifi["hostname"] = WiFi.getHostname();
-    wifi["gateway"] = WiFi.gatewayIP().toString();
-    wifi["subnet"] = WiFi.subnetMask().toString();
-    wifi["dns"] = WiFi.dnsIP().toString();
-    wifi["mDNS"] = OTAPushUpdateManager::getMDNSHostname()+".local";
-
-    JsonObject hardware = doc["hardware"].to<JsonObject>();
-        hardware["chipModel"] = ESP.getChipModel();
-    hardware["chipCores"] = ESP.getChipCores();
-    hardware["chipRevision"] = ESP.getChipRevision();
-    hardware["cpuFreq"] = ESP.getCpuFreqMHz();
-    hardware["heapFree"] = ESP.getFreeHeap();
-    hardware["heapTotal"] = ESP.getHeapSize();
-    hardware["heapMin"] = ESP.getMinFreeHeap();
-    hardware["psramSize"] = ESP.getPsramSize();
-    hardware["flashSize"] = ESP.getFlashChipSize();
-    hardware["flashSpeed"] = ESP.getFlashChipSpeed();
-    hardware["sdkVersion"] = ESP.getSdkVersion();
-
-    JsonObject system = doc["system"].to<JsonObject>();
-        system["firmwareVersion"] = String(OTAManager::getFirmwareVersion().c_str());
-    system["uptime"] = millis();
-    system["currentTime"] = InternalFunctions::getCurrentDateTime();
-    system["resetReason"] = "fazer isso";
-    system["resetInfo"] = "fazer isso";
-
-        JsonObject filesystem = doc["filesystem"].to<JsonObject>();
-    filesystem["totalBytes"] = LittleFS.totalBytes();
-    filesystem["usedBytes"] = LittleFS.usedBytes();
-    filesystem["freeBytes"] = LittleFS.totalBytes() - LittleFS.usedBytes();
-    
-    // Serializa o JSON para string
-    String jsonResponse;
-    serializeJson(doc, jsonResponse);
-    
-    LOG_INFO("📤 Enviando system info: %s", jsonResponse.c_str());
-    request->send(200, "application/json", jsonResponse); });
-
-    server->on("/api/uptime", HTTP_GET, [](AsyncWebServerRequest *request)
-               {
-    unsigned long milliseconds = millis();
-    unsigned long seconds = milliseconds / 1000;
-    unsigned long minutes = seconds / 60;
-    unsigned long hours = minutes / 60;
-    unsigned long days = hours / 24;
-    
-    String uptime = String(days) + "d " + 
-                   String(hours % 24) + "h " + 
-                   String(minutes % 60) + "m " + 
-                   String(seconds % 60) + "s";
-    
-    request->send(200, "text/plain", uptime); });
 
     server->on("/check-updates", HTTP_GET, [](AsyncWebServerRequest *request)
                {
     LOG_INFO("🔍 Verificação de atualizações solicitada");
+    OTAManager::checkForUpdates();
+
+    LOG_INFO("Versão atual: %s\tVersão do servidor: %s", OTAManager::getFirmwareVersion().c_str(), OTAManager::getLatestVersion().c_str());
     
     JsonDocument doc;
     doc["status"] = "up_to_date";
     doc["message"] = "Sistema atualizado";
     doc["current_version"] = OTAManager::getFirmwareVersion().c_str();
-    doc["latest_version"] = OTAManager::getFirmwareVersion().c_str();
+    doc["latest_version"] = OTAManager::getLatestVersion().c_str();
     doc["timestamp"] = InternalFunctions::getCurrentDateTime();
     
     String jsonResponse;
@@ -334,11 +541,19 @@ void WebAssetManager::setupRoutes(AsyncWebServer *server)
     
     request->send(200, "application/json", debugResponse); });
 
+    // ✅ API para salvar configurações (CORRIGIDA)
+
     // -->>✅ Colocar por ultimo<<--
     server->on("^\\/(.+)$", HTTP_GET, [](AsyncWebServerRequest *request)
                {
         String filename = request->pathArg(0);
         LOG_INFO("📁 Arquivo solicitado: %s", filename.c_str());
+
+            if (filename.startsWith("api/")) {
+        LOG_WARN("⚠️ Rota API não encontrada: %s", filename.c_str());
+        request->send(404, "text/plain", "API endpoint not found: " + filename);
+        return;
+    }
         
         // Verifica se é um arquivo com extensão conhecida
         if (filename.endsWith(".html") || filename.endsWith(".css") || 
@@ -489,6 +704,33 @@ void WebAssetManager::handleFilesystemUpload(AsyncWebServerRequest *request, con
         {
             request->send(500, "text/plain", "Upload failed");
         }
+    }
+}
+
+String WebAssetManager::getEncryptionType(wifi_auth_mode_t encryptionType)
+{
+    switch (encryptionType)
+    {
+    case WIFI_AUTH_OPEN:
+        return "OPEN";
+    case WIFI_AUTH_WEP:
+        return "WEP";
+    case WIFI_AUTH_WPA_PSK:
+        return "WPA";
+    case WIFI_AUTH_WPA2_PSK:
+        return "WPA2";
+    case WIFI_AUTH_WPA_WPA2_PSK:
+        return "WPA/WPA2";
+    case WIFI_AUTH_WPA2_ENTERPRISE:
+        return "WPA2-Enterprise";
+    case WIFI_AUTH_WPA3_PSK:
+        return "WPA3";
+    case WIFI_AUTH_WPA2_WPA3_PSK:
+        return "WPA2/WPA3";
+    case WIFI_AUTH_WAPI_PSK:
+        return "WAPI";
+    default:
+        return "UNKNOWN";
     }
 }
 

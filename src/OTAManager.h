@@ -3,6 +3,7 @@
 #include "LogLibrary.h"
 #include "OTAPullUpdateManager.h"
 #include "OTAPushUpdateManager.h"
+#include <ArduinoJson.h>
 
 class OTAManager
 {
@@ -25,6 +26,7 @@ public:
     static void end();
     static void setUpdateMode(UpdateMode mode);
     static void setServerUrl(const String &serverUrl);
+    static String getServerUrl();
     static void setWebCredentials(const String &username, const String &password);
     static void setMDNS(const String &hostname);
     static void setPullInterval(uint16_t minutes);
@@ -40,6 +42,12 @@ public:
     static String getFirmwareVersion();
     static void setFirmwareVersion(const String &version);
 
+    static bool isAutoUpdateEnabled();
+    static void setAutoUpdateEnabled(bool enabled);
+    static int getUpdateInterval();
+    static void setUpdateInterval(int hours);
+    static String getLastUpdateCheck();
+
 private:
     static UpdateMode _currentMode;
     static String _serverUrl;
@@ -47,6 +55,16 @@ private:
     static String _latestVersion;
     static String _currentVersion;
 
+    static bool _autoUpdateEnabled;
+    static int _updateIntervalHours;
+    static unsigned long _lastUpdateCheck;
+    static unsigned long _lastConfigSave;
+
     static esp_err_t init();
     static esp_err_t writeVersion(const String &version);
+
+    static void loadConfig();
+    static void saveConfig();
+    static esp_err_t writeConfigToFile();
+    static esp_err_t readConfigFromFile();
 };

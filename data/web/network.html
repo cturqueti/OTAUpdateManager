@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações de Rede - ESP32 OTA</title>
+    <link rel="icon" type="image/png" href="/assets/icons/favicon.png">
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="stylesheet" href="/assets/css/components/navbar.css">
+    <link rel="stylesheet" href="/assets/css/components/buttons.css">
+    <link rel="stylesheet" href="/assets/css/components/cards.css">
+    <link rel="stylesheet" href="/assets/css/components/forms.css">
+    <link rel="stylesheet" href="/assets/css/layouts/grid.css">
+    <link rel="stylesheet" href="/assets/css/layouts/responsive.css">
+    <link rel="stylesheet" href="/assets/css/utilities.css">
+</head>
+<body class="dark">
+    <div class="container">
+        <div id="navbar-container">
+            <!-- Navbar será carregada aqui via JavaScript -->
+            <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">
+                Carregando menu...
+            </div>
+        </div>
+        
+        <main class="main-content">
+            <div class="header">
+                <div class="header-left">
+                    <h1>Configurações de Rede</h1>
+                    <div class="time-info">
+                        <div class="system-time" id="currentTime">Carregando...</div>
+                        <div class="uptime" id="uptime">Uptime: Carregando...</div>
+                    </div>
+                </div>
+                <button class="theme-toggle" onclick="toggleTheme()">
+                    ☀️
+                </button>
+            </div>
+            
+            <div class="config-section">
+                <!-- Card de Rede Atual -->
+                <div class="config-card">
+                    <h3>📶 Rede Atual</h3>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <span class="status-label">SSID:</span>
+                            <span class="status-value" id="currentSSID">Carregando...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Status:</span>
+                            <span class="status-value" id="wifiStatus">Carregando...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">IP:</span>
+                            <span class="status-value" id="currentIP">Carregando...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Força do Sinal:</span>
+                            <span class="status-value" id="signalStrength">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card de Configuração de Nova Rede -->
+                <div class="config-card">
+                    <h3>🔄 Alterar Rede WiFi</h3>
+                    
+                    <div class="form-group">
+                        <label for="wifiScan">Redes Disponíveis:</label>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <select id="wifiScan" class="form-select">
+                                <option value="">Clique em "Buscar Redes"</option>
+                            </select>
+                            <button class="btn btn-secondary" onclick="scanNetworks()" style="white-space: nowrap;">
+                                🔍 Buscar Redes
+                            </button>
+                        </div>
+                        <p class="form-help">Selecione uma rede da lista ou configure manualmente abaixo.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ssid">SSID (Nome da Rede):</label>
+                        <input type="text" id="ssid" class="input-field" 
+                               placeholder="Nome da rede WiFi" 
+                               onchange="ssidChanged()">
+                        <p class="form-help">Para redes ocultas, digite o nome manualmente.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Senha:</label>
+                        <input type="password" id="password" class="input-field" 
+                               placeholder="Senha da rede WiFi">
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="btn btn-primary" onclick="saveWiFiConfig()">
+                            💾 Salvar e Conectar
+                        </button>
+                        <button class="btn btn-secondary" onclick="clearWiFiConfig()">
+                            🗑️ Limpar Configuração
+                        </button>
+                    </div>
+
+                    <div id="connectionStatus" style="margin-top: 1rem; display: none;">
+                        <!-- Status da conexão será mostrado aqui -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card de Informações Avançadas -->
+            <div class="config-card" style="margin-top: 2rem;">
+                <h3>⚙️ Configurações Avançadas</h3>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enableAP" onchange="toggleAPMode()">
+                        <span class="checkmark"></span>
+                        Modo Access Point (AP)
+                    </label>
+                    <p class="form-help">Quando ativado, o ESP32 criará sua própria rede WiFi se não conseguir conectar a nenhuma rede.</p>
+                </div>
+
+                <div class="form-group" id="apConfigGroup" style="display: none;">
+                    <label for="apSSID">Nome do Access Point:</label>
+                    <input type="text" id="apSSID" class="input-field" 
+                           placeholder="ESP32-AP" value="ESP32-OTA">
+                    
+                    <label for="apPassword" style="margin-top: 1rem;">Senha do AP:</label>
+                    <input type="password" id="apPassword" class="input-field" 
+                           placeholder="Deixe em branco para rede aberta">
+                </div>
+            </div>
+        </main>
+        
+        <footer class="footer">
+            <p>ESP32 - <span id="hostInfo">Carregando...</span></p>
+        </footer>
+    </div>
+
+    <script src="/assets/js/scripts.js"></script>
+    <script src="/assets/js/components.js"></script>
+    <script src="/assets/js/network.js"></script>
+</body>
+</html>

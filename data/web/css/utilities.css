@@ -1,0 +1,59 @@
+/* utilities.css - Utility classes */
+
+.loading {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 2rem;
+}
+
+.empty {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 2rem;
+}
+
+.error {
+    text-align: center;
+    color: var(--error);
+    padding: 2rem;
+}
+
+.warning-text {
+    color: var(--error);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+.path-info {
+    color: var(--text-secondary);
+    font-family: monospace;
+    background: var(--bg-secondary);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+}
+
+.status-message {
+    padding: 1rem;
+    border-radius: 4px;
+    margin: 1rem 0;
+    display: none;
+}
+
+.status-message.success {
+    background-color: var(--success-bg);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.status-message.error {
+    background-color: var(--error-bg);
+    color: var(--error);
+    border: 1px solid var(--error);
+}
+
+.status-message.info {
+    background-color: var(--info-bg);
+    color: var(--info);
+    border: 1px solid var(--info);
+}

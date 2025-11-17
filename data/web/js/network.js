@@ -359,6 +359,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Atualizar informações do sistema
     updateSystemInfo();
     setInterval(updateSystemInfo, 30000);
+    scanNetworks();
 });
 
 // Funções para atualizar tempo e uptime

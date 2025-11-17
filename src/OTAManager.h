@@ -3,7 +3,15 @@
 #include "LogLibrary.h"
 #include "OTAPullUpdateManager.h"
 #include "OTAPushUpdateManager.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+#include "freertos/task.h"
 #include <ArduinoJson.h>
+#include <Preferences.h>
+#include <WiFi.h>
+
+#define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAIL_BIT BIT1
 
 class OTAManager
 {
@@ -48,12 +56,17 @@ public:
     static void setUpdateInterval(int hours);
     static String getLastUpdateCheck();
 
+    static void setWifiCredentials(const String &wifiSSID, const String &wifiPassword);
+
 private:
     static UpdateMode _currentMode;
     static String _serverUrl;
     static bool _updateAvailable;
     static String _latestVersion;
     static String _currentVersion;
+
+    static String _wifiSSID;
+    static String _wifiPassword;
 
     static bool _autoUpdateEnabled;
     static int _updateIntervalHours;

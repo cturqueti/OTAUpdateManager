@@ -272,10 +272,17 @@ function showFileInfo(filePath) {
         });
 }
 
-// Função auxiliar para mostrar modal personalizado
+// Função auxiliar para mostrar modal personalizado - CORRIGIDA
 function showCustomModal(title, content) {
-    // Você pode implementar um modal personalizado ou usar o alert
+    // Remover modais existentes primeiro
+    const existingModal = document.querySelector('.custom-modal');
+    const existingOverlay = document.querySelector('.modal-overlay');
+    if (existingModal) existingModal.remove();
+    if (existingOverlay) existingOverlay.remove();
+
+    // Criar modal
     const modal = document.createElement('div');
+    modal.className = 'custom-modal';
     modal.style.cssText = `
         position: fixed;
         top: 50%;
@@ -288,17 +295,19 @@ function showCustomModal(title, content) {
         z-index: 1000;
         max-width: 500px;
         width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
         box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     `;
     
     modal.innerHTML = `
-        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <h3 style="margin: 0; color: var(--text-primary);">${title}</h3>
-            <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--text-secondary);">&times;</button>
+            <button class="close-modal-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
         </div>
-        <div>${content}</div>
+        <div class="modal-content">${content}</div>
         <div style="margin-top: 20px; text-align: right;">
-            <button onclick="this.parentElement.parentElement.parentElement.remove()" style="padding: 8px 16px; background: var(--accent-primary); color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+            <button class="close-modal-btn" style="padding: 8px 16px; background: var(--accent-primary); color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
         </div>
     `;
     
@@ -306,6 +315,7 @@ function showCustomModal(title, content) {
     
     // Adicionar overlay
     const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
     overlay.style.cssText = `
         position: fixed;
         top: 0;
@@ -315,11 +325,35 @@ function showCustomModal(title, content) {
         background: rgba(0,0,0,0.5);
         z-index: 999;
     `;
-    overlay.onclick = () => {
+    document.body.appendChild(overlay);
+    
+    // Adicionar event listeners CORRETOS
+    const closeModal = () => {
         modal.remove();
         overlay.remove();
     };
-    document.body.appendChild(overlay);
+    
+    // Fechar ao clicar no overlay
+    overlay.addEventListener('click', closeModal);
+    
+    // Fechar ao clicar em qualquer botão de fechar
+    const closeButtons = modal.querySelectorAll('.close-modal-btn');
+    closeButtons.forEach(button => {
+        button.addEventListener('click', closeModal);
+    });
+    
+    // Fechar com a tecla ESC
+    const handleKeydown = (event) => {
+        if (event.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', handleKeydown);
+        }
+    };
+    document.addEventListener('keydown', handleKeydown);
+    
+    // Remover o event listener quando o modal for fechado
+    modal._closeModal = closeModal;
+    modal._handleKeydown = handleKeydown;
 }
 
 function refreshFileList() {

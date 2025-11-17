@@ -1,4 +1,5 @@
 #include "OTAManager.h"
+#include "WiFiManager.h"
 #include "handlers/WebAssetManager.h"
 #include <Preferences.h>
 
@@ -8,11 +9,15 @@ String OTAManager::_serverUrl = "";
 bool OTAManager::_updateAvailable = false;
 String OTAManager::_latestVersion = "";
 String OTAManager::_currentVersion = FIRMWARE_VERSION;
+// String OTAManager::_wifiMemoryAddress = "wifi-config";
 
 bool OTAManager::_autoUpdateEnabled = true; // Padrão: habilitado
 int OTAManager::_updateIntervalHours = 24;  // Padrão: 24 horas
 unsigned long OTAManager::_lastUpdateCheck = 0;
 unsigned long OTAManager::_lastConfigSave = 0;
+
+String OTAManager::_wifiSSID = "";
+String OTAManager::_wifiPassword = "";
 
 Preferences preferences;
 
@@ -310,6 +315,12 @@ String OTAManager::getLastUpdateCheck()
     }
 }
 
+void OTAManager::setWifiCredentials(const String &wifiSSID, const String &wifiPassword)
+{
+    _wifiSSID = wifiSSID;
+    _wifiPassword = wifiPassword;
+}
+
 void OTAManager::loadConfig()
 {
     if (!LittleFS.begin(true))
@@ -469,6 +480,34 @@ void OTAManager::setFirmwareVersion(const String &version)
 
 esp_err_t OTAManager::init()
 {
+    if (!WiFiManager::isConnected())
+    {
+        // Adicionar redes WiFi se disponíveis
+        if (!_wifiSSID.isEmpty())
+        {
+            WiFiManager::addNetwork(_wifiSSID, _wifiPassword);
+        }
+
+        // Iniciar WiFiManager
+        WiFiManager::begin();
+
+        // Aguardar conexão por um tempo
+        int timeout = 30; // 30 segundos
+        while (!WiFiManager::isConnected() && timeout > 0)
+        {
+            delay(1000);
+            timeout--;
+            Serial.print(".");
+        }
+
+        if (!WiFiManager::isConnected())
+        {
+            LOG_ERROR("❌ Timeout na conexão WiFi");
+            return ESP_ERR_TIMEOUT;
+        }
+        WiFiManager::setAutoReconnect(true);
+    }
+
     if (!LittleFS.begin(true))
     {
         LOG_ERROR("Falha ao montar LittleFS");
@@ -572,3 +611,38 @@ void OTAManager::setPullInterval(uint16_t minutes)
         setUpdateInterval(hours);
     }
 }
+
+// esp_err_t OTAManager::initWifi()
+// {
+//     if (_wifiSSID.isEmpty())
+//     {
+//         Preferences preferences;
+//         preferences.begin(_wifiMemoryAddress.c_str(), true);
+//         _wifiSSID = preferences.getString("ssid", "");
+//         _wifiPassword = preferences.getString("password", "");
+//         preferences.end();
+//     }
+
+//     if (!_wifiSSID.isEmpty())
+//     {
+//         LOG_DEBUG("SSID: %s,\t Senha: %s", _wifiSSID.c_str(), _wifiPassword.c_str());
+//         LOG_INFO("Conectando ao WiFi: %s", _wifiSSID.c_str());
+
+//         WiFi.begin(_wifiSSID.c_str(), _wifiPassword.c_str());
+//         while (WiFi.status() != WL_CONNECTED)
+//         {
+//             delay(500);
+
+//             if (_wifiRetryCount < 0)
+//             {
+//                 LOG_ERROR("❌ Falha ao conectar ao WiFi");
+//                 return ESP_ERR_WIFI_BASE;
+//             }
+
+//             _wifiRetryCount--;
+//             Serial.print(".");
+//         }
+//         LOG_INFO("Conectado ao WiFi: %s", WiFi.SSID().c_str());
+//     }
+//     return ESP_OK;
+// }

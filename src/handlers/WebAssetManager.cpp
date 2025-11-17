@@ -447,44 +447,136 @@ void WebAssetManager::setupRoutes(AsyncWebServer *server)
         LOG_INFO("📶 Conectando à rede WiFi");
     }
     
+    // ⚠️ IMPORTANTE: Aguardar todos os dados
+    if (index + len != total) {
+        return;
+    }
+    
     String body = String((char*)data, len);
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, body);
     
     if (error) {
         LOG_ERROR("❌ Erro ao parsear JSON: %s", error.c_str());
-        request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+        request->send(400, "application/json", "{\"success\":false,\"error\":\"Invalid JSON\"}");
         return;
     }
     
     String ssid = doc["ssid"].as<String>();
     String password = doc["password"].as<String>();
+
+    LOG_INFO("🔗 Tentando conectar à rede: %s", ssid.c_str());
     
     if (ssid.isEmpty()) {
-        request->send(400, "application/json", "{\"error\":\"SSID is required\"}");
+        request->send(400, "application/json", "{\"success\":false,\"error\":\"SSID is required\"}");
         return;
     }
+
+    // Verificar se já está conectado a esta rede
+    if (WiFi.SSID() == ssid && WiFi.status() == WL_CONNECTED) {
+        LOG_INFO("ℹ️ Já conectado a esta rede");
+        
+        JsonDocument responseDoc;
+        responseDoc["success"] = true;
+        responseDoc["message"] = "Já conectado a esta rede";
+        responseDoc["ssid"] = ssid;
+        responseDoc["ip"] = WiFi.localIP().toString();
+        responseDoc["rssi"] = WiFi.RSSI();
+        
+        String jsonResponse;
+        serializeJson(responseDoc, jsonResponse);
+        request->send(200, "application/json", jsonResponse);
+        return;
+    }
+
+    // Desconectar e tentar nova conexão
+    WiFi.disconnect();
+    delay(1000);
     
-    // Salvar credenciais na preferências (não na LittleFS)
-    Preferences preferences;
-    preferences.begin("wifi-config", false);
-    preferences.putString("ssid", ssid);
-    preferences.putString("password", password);
-    preferences.end();
-    
-    LOG_INFO("🔑 Credenciais salvas - Conectando à: %s", ssid.c_str());
-    
-    // Tentar conectar
     WiFi.begin(ssid.c_str(), password.c_str());
+
+    // Tentativa de conexão com timeout
+    unsigned long startTime = millis();
+    const unsigned long timeout = 20000; // 20 segundos
+    int lastStatus = -1;
+    bool connected = false;
     
-    JsonDocument responseDoc;
-    responseDoc["status"] = "connecting";
-    responseDoc["message"] = "Conectando à rede " + ssid;
-    responseDoc["ssid"] = ssid;
-    
-    String jsonResponse;
-    serializeJson(responseDoc, jsonResponse);
-    request->send(200, "application/json", jsonResponse); });
+    while (millis() - startTime < timeout) {
+        int currentStatus = WiFi.status();
+        
+        // Log apenas quando o status mudar
+        if (currentStatus != lastStatus) {
+            LOG_DEBUG("📶 Status WiFi: %d", currentStatus);
+            lastStatus = currentStatus;
+        }
+        
+        if (currentStatus == WL_CONNECTED) {
+            connected = true;
+            break;
+        }
+        
+        // Se falhou, não continuar tentando
+        if (currentStatus == WL_CONNECT_FAILED || currentStatus == WL_NO_SSID_AVAIL) {
+            break;
+        }
+        
+        delay(500);
+    }
+
+    if (connected) {
+        LOG_INFO("✅ Conectado com sucesso à rede: %s", ssid.c_str());
+        LOG_INFO("📡 IP obtido: %s", WiFi.localIP().toString().c_str());
+
+        // Salvar credenciais
+        Preferences preferences;
+        preferences.begin("wifi-config", false);
+        preferences.putString("ssid", ssid);
+        preferences.putString("password", password);
+        preferences.end();
+        
+        LOG_INFO("💾 Credenciais salvas para: %s", ssid.c_str());
+        
+        JsonDocument responseDoc;
+        responseDoc["success"] = true;
+        responseDoc["message"] = "Conectado com sucesso à rede " + ssid; // ✅ Corrigido
+        responseDoc["ssid"] = ssid;
+        responseDoc["ip"] = WiFi.localIP().toString();
+        responseDoc["rssi"] = WiFi.RSSI();
+        responseDoc["gateway"] = WiFi.gatewayIP().toString();
+        responseDoc["subnet"] = WiFi.subnetMask().toString();
+        
+        String jsonResponse;
+        serializeJson(responseDoc, jsonResponse);
+        request->send(200, "application/json", jsonResponse);
+    } else {
+        // Mensagem de erro mais específica
+        String errorMsg;
+        switch (WiFi.status()) {
+            case WL_NO_SSID_AVAIL:
+                errorMsg = "Rede não encontrada";
+                break;
+            case WL_CONNECT_FAILED:
+                errorMsg = "Senha incorreta";
+                break;
+            case WL_IDLE_STATUS:
+                errorMsg = "Tempo de conexão esgotado";
+                break;
+            default:
+                errorMsg = "Falha na conexão WiFi. Status: " + String(WiFi.status());
+        }
+        
+        LOG_ERROR("❌ Falha ao conectar à rede: %s - %s", ssid.c_str(), errorMsg.c_str());
+        
+        JsonDocument responseDoc;
+        responseDoc["success"] = false;
+        responseDoc["error"] = errorMsg;
+        responseDoc["ssid"] = ssid;
+        responseDoc["status"] = WiFi.status();
+        
+        String jsonResponse;
+        serializeJson(responseDoc, jsonResponse);
+        request->send(400, "application/json", jsonResponse);
+    } });
 
     server->on("/api/network/clear", HTTP_POST, [](AsyncWebServerRequest *request)
                {
